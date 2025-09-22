@@ -2,19 +2,31 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
 
 func main() {
+	addrFlag := flag.String("a", "localhost:8080", "HTTP listen address (host:port), e.g. localhost:8080")
+	flag.Parse()
+
+	addr, err := normalizeListenAddress(*addrFlag)
+	if err != nil {
+		log.Fatal("Invalid listen address: ", err)
+	}
+
 	storage := repository.NewMemStorage()
 	metricsHandler := handler.NewMetricsHandler(storage)
 	r := chi.NewRouter()
@@ -25,7 +37,7 @@ func main() {
 	r.Get("/", metricsHandler.ListAllMetricsHTML)
 
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              addr,
 		Handler:           r,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -49,4 +61,18 @@ func main() {
 	}
 	log.Println("Server exited properly")
 
+}
+func normalizeListenAddress(addr string) (string, error) {
+	if addr == "" {
+		return "", fmt.Errorf("empty -a")
+	}
+
+	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+		u, err := url.Parse(addr)
+		if err != nil || u.Host == "" {
+			return "", fmt.Errorf("invalid -a: %q: must be host:port", addr)
+		}
+		addr = u.Host
+	}
+	return addr, nil
 }
