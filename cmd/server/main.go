@@ -22,9 +22,14 @@ func main() {
 	addrFlag := flag.String("a", "localhost:8080", "HTTP listen address (host:port), e.g. localhost:8080")
 	flag.Parse()
 
-	addr, err := normalizeListenAddress(*addrFlag)
+	addr := *addrFlag
+	if v, ok := os.LookupEnv("ADDRESS"); ok && v != "" {
+		addr = v
+	}
+
+	addr, err := normalizeListenAddress(addr)
 	if err != nil {
-		log.Fatal("Invalid listen address: ", err)
+		log.Fatalf("Invalid listen address: %v", err)
 	}
 
 	storage := repository.NewMemStorage()

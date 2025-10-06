@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -19,16 +20,36 @@ func main() {
 	pollSec := flag.Int("p", 2, "poll interval in seconds")
 	flag.Parse()
 
-	if *reportSec <= 0 {
+	address := *addrFlag
+	if v, ok := os.LookupEnv("ADDRESS"); ok && v != "" {
+		address = v
+	}
+	rSecs := *reportSec
+	if v, ok := os.LookupEnv("REPORT_INTERVAL"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			log.Fatalf("invalid REPORT_INTERVAL %q: must be a positive integer seconds", v)
+		}
+		rSecs = n
+	}
+	pSecs := *pollSec
+	if v, ok := os.LookupEnv("POLL_INTERVAL"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			log.Fatalf("invalid POLL_INTERVAL %q: must be a positive integer seconds", v)
+		}
+		pSecs = n
+	}
+	if rSecs <= 0 {
 		log.Fatalf("invalid -r: must be > 0 seconds")
 	}
-	if *pollSec <= 0 {
+	if pSecs <= 0 {
 		log.Fatalf("invalid -p: must be > 0 seconds")
 	}
 
-	serverURL := ensureHTTPPrefix(*addrFlag)
-	pollInterval := time.Duration(*pollSec) * time.Second
-	reportInterval := time.Duration(*reportSec) * time.Second
+	serverURL := ensureHTTPPrefix(address)
+	pollInterval := time.Duration(pSecs) * time.Second
+	reportInterval := time.Duration(rSecs) * time.Second
 
 	log.Println("Starting metrics agent...")
 	log.Printf("Server URL: %s", serverURL)
