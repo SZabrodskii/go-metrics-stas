@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
+	mw "github.com/SZabrodskii/go-metrics-stas/internal/middleware"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/pkg/logging"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"log"
@@ -32,10 +34,13 @@ func main() {
 		log.Fatalf("Invalid listen address: %v", err)
 	}
 
+	logg, cleanup := logging.NewLogger()
+	defer cleanup()
 	storage := repository.NewMemStorage()
 	metricsHandler := handler.NewMetricsHandler(storage)
+
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.Logger, middleware.Recoverer, middleware.RealIP)
+	r.Use(middleware.RequestID, middleware.RealIP, mw.ZapRequestLogger(logg), middleware.Recoverer)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Get("/value/{type}/{name}", metricsHandler.GetMetricValue)
