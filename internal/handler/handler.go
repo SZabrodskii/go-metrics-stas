@@ -198,6 +198,7 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			MType: "gauge",
 			Value: m.Value,
 		}
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
 	case "counter":
@@ -222,6 +223,7 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			MType: "counter",
 			Delta: &newVal,
 		}
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
 	default:
@@ -262,6 +264,7 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 			MType: "gauge",
 			Value: &val,
 		}
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
 	case "counter":
@@ -279,6 +282,7 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 			MType: "counter",
 			Delta: &val,
 		}
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
 	default:

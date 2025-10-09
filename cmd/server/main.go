@@ -40,7 +40,7 @@ func main() {
 	metricsHandler := handler.NewMetricsHandler(storage)
 
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, mw.ZapRequestLogger(logg), middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.ZapRequestLogger(logg), middleware.Recoverer)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
