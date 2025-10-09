@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"html"
@@ -161,4 +162,128 @@ func (h *MetricsHandler) ListAllMetricsHTML(w http.ResponseWriter, r *http.Reque
 	}
 	builder.WriteString("</body></html>")
 	_, _ = w.Write([]byte(builder.String()))
+}
+
+func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	var m struct {
+		ID    string   `json:"id"`
+		MType string   `json:"type"`
+		Delta *int64   `json:"delta,omitempty"`
+		Value *float64 `json:"value,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if m.ID == "" || m.MType == "" {
+		http.Error(w, "id and type are required", http.StatusBadRequest)
+		return
+	}
+	switch m.MType {
+	case "gauge":
+		if m.Value == nil {
+			http.Error(w, "value is required for gauge", http.StatusBadRequest)
+			return
+		}
+		h.repo.UpdateGauge(m.ID, *m.Value)
+
+		resp := struct {
+			ID    string   `json:"id"`
+			MType string   `json:"type"`
+			Value *float64 `json:"value"`
+		}{
+			ID:    m.ID,
+			MType: "gauge",
+			Value: m.Value,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+
+	case "counter":
+		if m.Delta == nil {
+			http.Error(w, "delta is required for counter", http.StatusBadRequest)
+			return
+		}
+		h.repo.UpdateCounter(m.ID, *m.Delta)
+
+		newVal, err := h.repo.GetCounter(m.ID)
+		if err != nil {
+			http.Error(w, "failed to retrieve updated counter", http.StatusInternalServerError)
+			return
+		}
+
+		resp := struct {
+			ID    string `json:"id"`
+			MType string `json:"type"`
+			Delta *int64 `json:"delta"`
+		}{
+			ID:    m.ID,
+			MType: "counter",
+			Delta: &newVal,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+
+	default:
+		http.Error(w, "invalid metric type", http.StatusBadRequest)
+		return
+	}
+}
+
+func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	var q struct {
+		ID    string `json:"id"`
+		MType string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if q.ID == "" || q.MType == "" {
+		http.Error(w, "id and type are required", http.StatusBadRequest)
+		return
+	}
+
+	switch q.MType {
+	case "gauge":
+		val, err := h.repo.GetGauge(q.ID)
+		if err != nil {
+			http.Error(w, "gauge not found", http.StatusNotFound)
+			return
+		}
+		resp := struct {
+			ID    string   `json:"id"`
+			MType string   `json:"type"`
+			Value *float64 `json:"value"`
+		}{
+			ID:    q.ID,
+			MType: "gauge",
+			Value: &val,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+
+	case "counter":
+		val, err := h.repo.GetCounter(q.ID)
+		if err != nil {
+			http.Error(w, "counter not found", http.StatusNotFound)
+			return
+		}
+		resp := struct {
+			ID    string `json:"id"`
+			MType string `json:"type"`
+			Delta *int64 `json:"delta"`
+		}{
+			ID:    q.ID,
+			MType: "counter",
+			Delta: &val,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+
+	default:
+		http.Error(w, "invalid metric type", http.StatusBadRequest)
+		return
+	}
+
 }

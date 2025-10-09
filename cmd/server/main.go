@@ -43,6 +43,8 @@ func main() {
 	r.Use(middleware.RequestID, middleware.RealIP, mw.ZapRequestLogger(logg), middleware.Recoverer)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
+	r.Post("/update", metricsHandler.UpdateMetricJSON)
+	r.Post("/value", metricsHandler.GetMetricValueJSON)
 	r.Get("/value/{type}/{name}", metricsHandler.GetMetricValue)
 	r.Get("/", metricsHandler.ListAllMetricsHTML)
 
