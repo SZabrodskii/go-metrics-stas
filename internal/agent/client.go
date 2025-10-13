@@ -2,11 +2,13 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"log"
 	"net/http"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
 type MetricsClient struct {
@@ -36,17 +38,27 @@ func (mc *MetricsClient) SendMetric(metric model.Metrics) error {
 	payload.Delta = metric.Delta
 	payload.Value = metric.Value
 
-	body, err := json.Marshal(&payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metric: %v", err)
+	var jb bytes.Buffer
+	if err := json.NewEncoder(&jb).Encode(&payload); err != nil {
+		return fmt.Errorf("could not encode metrics to json: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	var gb bytes.Buffer
+	zw := gzip.NewWriter(&gb)
+	if _, err := zw.Write(jb.Bytes()); err != nil {
+		_ = zw.Close()
+		return fmt.Errorf("could not compress metrics: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("could not close gzip writer: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 
 	resp, err := mc.client.Do(req)
 	if err != nil {

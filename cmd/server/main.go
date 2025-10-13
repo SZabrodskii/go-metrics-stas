@@ -4,12 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
-	mw "github.com/SZabrodskii/go-metrics-stas/internal/middleware"
-	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
-	"github.com/SZabrodskii/go-metrics-stas/pkg/logging"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"log"
 	"net/http"
 	"net/url"
@@ -18,6 +12,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
+	mw "github.com/SZabrodskii/go-metrics-stas/internal/middleware"
+	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/pkg/logging"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 	metricsHandler := handler.NewMetricsHandler(storage)
 
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.ZapRequestLogger(logg), middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logg), middleware.Recoverer)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
@@ -50,7 +51,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           r,
+		Handler:           mw.CompressAccepted(r),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
