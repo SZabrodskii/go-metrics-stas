@@ -77,9 +77,7 @@ func CompressAccepted(next http.Handler) http.Handler {
 
 		ct := cw.Header().Get("Content-Type")
 		if !isCompressible(ct) || cw.statusOrDefault() >= 300 {
-			if !cw.headerSent {
-				w.WriteHeader(cw.statusOrDefault())
-			}
+			w.WriteHeader(cw.statusOrDefault())
 			_, _ = w.Write(cw.buf.Bytes())
 			return
 		}
