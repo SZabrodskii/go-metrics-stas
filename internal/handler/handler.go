@@ -2,22 +2,28 @@ package handler
 
 import (
 	"encoding/json"
-	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
-	"github.com/go-chi/chi/v5"
 	"html"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/go-chi/chi/v5"
 )
 
 type MetricsHandler struct {
-	repo repository.Storage
+	repo     repository.Storage
+	onUpdate func()
 }
 
-func NewMetricsHandler(repo repository.Storage) *MetricsHandler {
-	return &MetricsHandler{repo: repo}
+func NewMetricsHandler(repo repository.Storage, onUpdate ...func()) *MetricsHandler {
+	var cb func()
+	if len(onUpdate) > 0 {
+		cb = onUpdate[0]
+	}
+	return &MetricsHandler{repo: repo, onUpdate: cb}
 }
 
 func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +73,9 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.repo.UpdateGauge(metricName, value)
+		if h.onUpdate != nil {
+			h.onUpdate()
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	case "counter":
@@ -76,6 +85,9 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.repo.UpdateCounter(metricName, delta)
+		if h.onUpdate != nil {
+			h.onUpdate()
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	default:
@@ -188,6 +200,9 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.repo.UpdateGauge(m.ID, *m.Value)
+		if h.onUpdate != nil {
+			h.onUpdate()
+		}
 
 		resp := struct {
 			ID    string   `json:"id"`
@@ -207,6 +222,9 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.repo.UpdateCounter(m.ID, *m.Delta)
+		if h.onUpdate != nil {
+			h.onUpdate()
+		}
 
 		newVal, err := h.repo.GetCounter(m.ID)
 		if err != nil {
