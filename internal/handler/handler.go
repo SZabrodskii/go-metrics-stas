@@ -18,8 +18,12 @@ type MetricsHandler struct {
 	onUpdate func()
 }
 
-func NewMetricsHandler(repo repository.Storage, onUpdate func()) *MetricsHandler {
-	return &MetricsHandler{repo: repo, onUpdate: onUpdate}
+func NewMetricsHandler(repo repository.Storage, onUpdate ...func()) *MetricsHandler {
+	var cb func()
+	if len(onUpdate) > 0 {
+		cb = onUpdate[0]
+	}
+	return &MetricsHandler{repo: repo, onUpdate: cb}
 }
 
 func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
