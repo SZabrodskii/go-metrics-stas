@@ -1,30 +1,31 @@
 package agent
 
 import (
-	"runtime"
-	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"math/rand"
+	"runtime"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
-type MetricsCollector struct{
+type metricsCollector struct {
 	PollCount int64
 }
 
-func NewMetricsCollector() *MetricsCollector {
-	return &MetricsCollector{}
+func newMetricsCollector() *metricsCollector {
+	return &metricsCollector{}
 }
 
-func (mc *MetricsCollector) CollectMetrics() map[string]model.Metrics {
+func (mc *metricsCollector) CollectMetrics() map[string]model.Metrics {
 	mc.PollCount++
 
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	
+
 	metrics := make(map[string]model.Metrics)
-	
+
 	for _, metricName := range model.GaugeMetrics {
 		if metricName == model.MetricPollCount || metricName == model.MetricRandomValue {
-    		continue
+			continue
 		}
 		var value float64
 		switch metricName {
@@ -106,6 +107,6 @@ func (mc *MetricsCollector) CollectMetrics() map[string]model.Metrics {
 		MType: model.Gauge,
 		Value: &randomValue,
 	}
-	
+
 	return metrics
 }
