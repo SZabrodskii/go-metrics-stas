@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"html"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,44 +29,14 @@ func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, config *conf
 }
 
 func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+	metricValue := chi.URLParam(r, "value")
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if metricName == "" {
+		http.Error(w, "bad request: metric name is required", http.StatusBadRequest)
 		return
 	}
-
-	const prefix = "/update/"
-	if !strings.HasPrefix(r.URL.Path, prefix) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	path := strings.TrimPrefix(r.URL.Path, prefix)
-	parts := strings.Split(path, "/")
-
-	if len(parts) < 2 || parts[1] == "" {
-		http.Error(w, "path format is invalid", http.StatusBadRequest)
-		return
-	}
-
-	if len(parts) < 3 || parts[2] == "" {
-		http.Error(w, "bad request: metric value is required", http.StatusBadRequest)
-		return
-	}
-
-	if len(parts) > 3 {
-		http.Error(w, "bad request: too many parameters", http.StatusBadRequest)
-		return
-	}
-
-	metricType := parts[0]
-	metricName, err := url.PathUnescape(parts[1])
-	if err != nil || metricName == "" {
-		http.Error(w, "not found: metric name", http.StatusBadRequest)
-		return
-	}
-	metricValue := parts[2]
-
 	switch metricType {
 	case "gauge":
 		value, err := strconv.ParseFloat(metricValue, 64)
@@ -76,9 +45,6 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.repo.UpdateGauge(metricName, value)
-		repository.SyncSave(h.repo, h.config, h.logger)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
 	case "counter":
 		delta, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
@@ -86,13 +52,16 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.repo.UpdateCounter(metricName, delta)
-		repository.SyncSave(h.repo, h.config, h.logger)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
 	default:
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
 		return
 	}
+
+	repository.SyncSave(h.repo, h.config, h.logger)
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
 }
 
 func (h *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
