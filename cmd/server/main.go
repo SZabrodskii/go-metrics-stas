@@ -11,9 +11,9 @@ import (
 
 func main() {
 	fx.New(
+		logging.Module,
+		config.ProvideServerConfig(),
 		fx.Provide(
-			config.NewServerConfig,
-			logging.NewLogger,
 			fx.Annotate(
 				repository.NewFileStorage,
 				fx.As(new(repository.Storage)),
