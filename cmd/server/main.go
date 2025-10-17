@@ -15,7 +15,7 @@ func main() {
 			config.NewServerConfig,
 			logging.NewLogger,
 			fx.Annotate(
-				repository.NewMemStorage,
+				repository.NewFileStorage,
 				fx.As(new(repository.Storage)),
 			),
 			handler.NewMetricsHandler,
@@ -23,7 +23,6 @@ func main() {
 		),
 		fx.Invoke(
 			server.NewServer,
-			repository.NewPersister,
 		),
 	).Run()
 }
