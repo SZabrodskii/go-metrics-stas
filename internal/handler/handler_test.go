@@ -4,9 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/SZabrodskii/go-metrics-stas/internal/config"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -17,12 +15,7 @@ import (
 func TestUpdateMetric(t *testing.T) {
 	storage := repository.NewMemStorage()
 	logger, _ := zap.NewDevelopment()
-	testConfig := &config.ServerConfig{
-		StoreInterval:   0 * time.Second,
-		FileStoragePath: "/tmp/test-metrics-db.json",
-		Restore:         false,
-	}
-	handler := NewMetricsHandler(storage, logger, testConfig)
+	handler := NewMetricsHandler(storage, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", handler.UpdateMetric)

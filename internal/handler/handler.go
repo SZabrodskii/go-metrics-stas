@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SZabrodskii/go-metrics-stas/internal/config"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -17,14 +16,12 @@ import (
 type MetricsHandler struct {
 	repo   repository.Storage
 	logger *zap.Logger
-	config *config.ServerConfig
 }
 
-func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, config *config.ServerConfig) *MetricsHandler {
+func NewMetricsHandler(repo repository.Storage, logger *zap.Logger) *MetricsHandler {
 	return &MetricsHandler{
 		repo:   repo,
 		logger: logger,
-		config: config,
 	}
 }
 
@@ -56,8 +53,6 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
 		return
 	}
-
-	repository.SyncSave(h.repo, h.config, h.logger)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -168,7 +163,6 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.repo.UpdateGauge(m.ID, *m.Value)
-		repository.SyncSave(h.repo, h.config, h.logger)
 
 		resp := struct {
 			ID    string   `json:"id"`
@@ -188,7 +182,6 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.repo.UpdateCounter(m.ID, *m.Delta)
-		repository.SyncSave(h.repo, h.config, h.logger)
 
 		newVal, err := h.repo.GetCounter(m.ID)
 		if err != nil {
