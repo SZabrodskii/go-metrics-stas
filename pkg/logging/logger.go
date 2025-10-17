@@ -19,7 +19,8 @@ func NewLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	}
 	lc.Append(fx.Hook{
 		OnStop: func(context.Context) error {
-			return l.Sync()
+			_ = l.Sync()
+			return nil
 		},
 	})
 	return l, nil
