@@ -1,14 +1,26 @@
 package logging
 
-import "go.uber.org/zap"
+import (
+	"context"
 
-func NewLogger() (*zap.Logger, func()) {
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+)
+
+var Module = fx.Provide(NewLogger)
+
+func NewLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 
-	l, _ := cfg.Build()
-	cleanup := func() {
-		_ = l.Sync()
+	l, err := cfg.Build()
+	if err != nil {
+		return nil, err
 	}
-	return l, cleanup
+	lc.Append(fx.Hook{
+		OnStop: func(context.Context) error {
+			return l.Sync()
+		},
+	})
+	return l, nil
 }
