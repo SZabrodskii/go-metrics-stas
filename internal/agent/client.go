@@ -11,19 +11,19 @@ import (
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
-type MetricsClient struct {
+type metricsClient struct {
 	serverURL string
 	client    *http.Client
 }
 
-func NewMetricsClient(serverURL string) *MetricsClient {
-	return &MetricsClient{
+func newMetricsClient(serverURL string) *metricsClient {
+	return &metricsClient{
 		serverURL: serverURL,
 		client:    &http.Client{},
 	}
 }
 
-func (mc *MetricsClient) SendMetric(metric model.Metrics) error {
+func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	url := fmt.Sprintf("%s/update", mc.serverURL)
 
 	var payload struct {
@@ -76,7 +76,7 @@ func (mc *MetricsClient) SendMetric(metric model.Metrics) error {
 	return nil
 }
 
-func (mc *MetricsClient) SendMetrics(metrics map[string]model.Metrics) error {
+func (mc *metricsClient) SendMetrics(metrics map[string]model.Metrics) error {
 	for _, metric := range metrics {
 		if err := mc.SendMetric(metric); err != nil {
 			log.Printf("Failed to send metric %s: %v", metric.ID, err)
