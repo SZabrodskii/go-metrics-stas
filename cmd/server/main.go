@@ -11,10 +11,13 @@ import (
 
 func main() {
 	fx.New(
-		logging.Module,
 		fx.Provide(
 			config.NewServerConfig,
-			repository.NewMemStorage,
+			logging.NewLogger,
+			fx.Annotate(
+				repository.NewMemStorage,
+				fx.As(new(repository.Storage)),
+			),
 			handler.NewMetricsHandler,
 			server.NewRouter,
 		),
