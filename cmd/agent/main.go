@@ -13,10 +13,10 @@ import (
 func main() {
 	fx.New(
 		logging.Module,
+		config.ProvideAgentConfig(),
 		fx.Provide(
-			config.NewAgentConfig,
-			func(cfg *config.AgentConfig) *agent.Agent {
-				return agent.NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval)
+			func(cfg *config.AgentConfig, logger *zap.Logger) *agent.Agent {
+				return agent.NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, logger)
 			},
 		),
 		fx.Invoke(runAgent),
