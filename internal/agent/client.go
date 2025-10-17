@@ -73,7 +73,6 @@ func (mc *MetricsClient) SendMetric(metric model.Metrics) error {
 	var ack model.Metrics
 	_ = json.NewDecoder(resp.Body).Decode(&ack)
 
-	log.Printf("Sent metric %s (%s) via JSON", metric.ID, metric.MType)
 	return nil
 }
 
