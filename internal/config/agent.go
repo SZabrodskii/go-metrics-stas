@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/fx"
 )
 
 type AgentConfig struct {
@@ -51,4 +53,8 @@ func NewAgentConfig() *AgentConfig {
 		cfg.ServerAddress = "http://" + cfg.ServerAddress
 	}
 	return cfg
+}
+
+func ProvideAgentConfig() fx.Option {
+	return fx.Provide(NewAgentConfig)
 }

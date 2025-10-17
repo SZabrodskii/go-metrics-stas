@@ -46,7 +46,7 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("Shutting server down", zap.String("address", srv.Addr))
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			return srv.Shutdown(shutdownCtx)
 		},

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/fx"
 )
 
 type ServerConfig struct {
@@ -26,23 +28,32 @@ func NewServerConfig() *ServerConfig {
 
 	flag.Parse()
 
-	if addr, ok := os.LookupEnv("ADDRESS"); ok {
-		cfg.ListenAddress = addr
+	if v, ok := os.LookupEnv("ADDRESS"); ok {
+		if v == "" {
+			log.Fatalf("ADDRESS is set but empty")
+		}
+		cfg.ListenAddress = v
 	}
-	if val, ok := os.LookupEnv("STORE_INTERVAL"); ok {
-		n, err := strconv.Atoi(val)
-		if err != nil {
-			log.Fatalf("invalid value for STORE_INTERVAL %q: %v", val, err)
+	if v, ok := os.LookupEnv("STORE_INTERVAL"); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			log.Fatalf("invalid STORE_INTERVAL %q: must be >= 0", v)
 		}
 		*storeIntervalSec = n
 	}
-	if path, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
-		cfg.FileStoragePath = path
+	if v, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
+		if v == "" {
+			log.Fatalf("FILE_STORAGE_PATH is set but empty")
+		}
+		cfg.FileStoragePath = v
 	}
-	if val, ok := os.LookupEnv("RESTORE"); ok {
-		b, err := strconv.ParseBool(val)
+	if v, ok := os.LookupEnv("RESTORE"); ok {
+		if v == "" {
+			log.Fatalf("RESTORE is set but empty")
+		}
+		b, err := strconv.ParseBool(v)
 		if err != nil {
-			log.Fatalf("invalid value for RESTORE %q: %v", val, err)
+			log.Fatalf("invalid RESTORE %q", v)
 		}
 		cfg.Restore = b
 	}
@@ -53,4 +64,8 @@ func NewServerConfig() *ServerConfig {
 	}
 	return cfg
 
+}
+
+func ProvideServerConfig() fx.Option {
+	return fx.Provide(NewServerConfig)
 }
