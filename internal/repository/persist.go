@@ -24,9 +24,6 @@ func NewPersister(lc fx.Lifecycle, storage Storage, cfg *config.ServerConfig, lo
 		}
 	}
 
-	if cfg.StoreInterval == 0 {
-	}
-
 	var ticker *time.Ticker
 
 	lc.Append(fx.Hook{
