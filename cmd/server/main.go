@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
-	"github.com/SZabrodskii/go-metrics-stas/internal/config/db"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/SZabrodskii/go-metrics-stas/internal/server"
@@ -19,9 +18,7 @@ func main() {
 				repository.NewFileStorage,
 				fx.As(new(repository.Storage)),
 			),
-			db.NewDB,
 			handler.NewMetricsHandler,
-			handler.NewPingHandler,
 			server.NewRouter,
 		),
 		fx.Invoke(
