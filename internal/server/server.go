@@ -14,9 +14,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRouter(metricsHandler *handler.MetricsHandler, logger *zap.Logger) *chi.Mux {
+func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer)
+
+	r.Get("/ping", pingHandler)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
@@ -33,7 +35,6 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 		Handler:           mw.CompressAccepted(router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			logger.Info("Starting server", zap.String("address", srv.Addr))

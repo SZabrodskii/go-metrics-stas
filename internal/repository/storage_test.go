@@ -1,9 +1,10 @@
 package repository
 
 import (
-    "testing"
-    "github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"sync"
+	"testing"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
 func TestUpdateGauge(t *testing.T) {
@@ -91,7 +92,7 @@ func TestThreadSafety(t *testing.T) {
 			for j := 0; j < numOperations; j++ {
 				storage.UpdateCounter("concurrentCounter", 1)
 			}
-		} ()
+		}()
 	}
 
 	for i := 0; i < numGoroutines; i++ {
@@ -101,9 +102,8 @@ func TestThreadSafety(t *testing.T) {
 			for j := 0; j < numOperations; j++ {
 				storage.UpdateGauge("concurrentGauge", float64(j)*1.1)
 			}
-		} (float64(i))
+		}(float64(i))
 	}
-
 
 	wg.Wait()
 
@@ -139,9 +139,9 @@ func TestCounterSummation(t *testing.T) {
 	expected := int64(18)
 
 	if counter, exists := metrics["sumCounter"]; !exists {
-    t.Error("expected sumCounter to exist")
+		t.Error("expected sumCounter to exist")
 	} else if *counter.Delta != expected {
-    t.Errorf("expected sumCounter delta to be %d, got %d", expected, *counter.Delta)
+		t.Errorf("expected sumCounter delta to be %d, got %d", expected, *counter.Delta)
 	}
 
 	if *metrics["sumCounter"].Delta != expected {
@@ -151,7 +151,7 @@ func TestCounterSummation(t *testing.T) {
 
 func TestGaugeReplacement(t *testing.T) {
 	storage := NewMemStorage()
-	
+
 	storage.UpdateGauge("replaceGauge", 100.5)
 	storage.UpdateGauge("replaceGauge", 200.7)
 	storage.UpdateGauge("replaceGauge", 50.3)
@@ -163,9 +163,9 @@ func TestGaugeReplacement(t *testing.T) {
 
 	expected := 50.3
 	if gauge, exists := metrics["replaceGauge"]; !exists {
-    t.Error("expected replaceGauge to exist")
+		t.Error("expected replaceGauge to exist")
 	} else if *gauge.Value != expected {
-    t.Errorf("expected replaceGauge value to be %f, got %f", expected, *gauge.Value)
+		t.Errorf("expected replaceGauge value to be %f, got %f", expected, *gauge.Value)
 	}
 	if *metrics["replaceGauge"].Value != expected {
 		t.Errorf("expected replaceGauge value to be %f, got %v", expected, metrics["replaceGauge"].Value)
