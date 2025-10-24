@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewDB(lc fx.Lifecycle, cfg *config.ServerConfig, logger *zap.Logger) (*sql.DB, error) {
+func New(lc fx.Lifecycle, cfg *config.ServerConfig, logger *zap.Logger) (*sql.DB, error) {
 	if cfg.DatabaseDSN == "" {
 		logger.Warn("Database DSN not set, using in-memory store")
 		return nil, nil

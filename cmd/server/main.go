@@ -19,7 +19,7 @@ func main() {
 				repository.NewFileStorage,
 				fx.As(new(repository.Storage)),
 			),
-			db.NewDB,
+			db.New,
 			handler.NewMetricsHandler,
 			handler.NewPingHandler,
 			server.NewRouter,

@@ -35,7 +35,6 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 		Handler:           mw.CompressAccepted(router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			logger.Info("Starting server", zap.String("address", srv.Addr))
