@@ -16,6 +16,7 @@ type ServerConfig struct {
 	StoreInterval   time.Duration
 	FileStoragePath string
 	Restore         bool
+	DatabaseDSN     string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -25,6 +26,7 @@ func NewServerConfig() *ServerConfig {
 	storeIntervalSec := flag.Int("i", 300, "Store interval in seconds (0 = sync write)")
 	flag.StringVar(&cfg.FileStoragePath, "f", "/tmp/metrics-db.json", "File to persist metrics")
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore metrics from file on start")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "", "PostgreSQL DSN (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
 
 	flag.Parse()
 
@@ -56,6 +58,9 @@ func NewServerConfig() *ServerConfig {
 			log.Fatalf("invalid RESTORE %q", v)
 		}
 		cfg.Restore = b
+	}
+	if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		cfg.DatabaseDSN = v
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 

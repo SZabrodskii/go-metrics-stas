@@ -14,9 +14,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRouter(metricsHandler *handler.MetricsHandler, logger *zap.Logger) *chi.Mux {
+func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer)
+
+	r.Get("/ping", pingHandler)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
