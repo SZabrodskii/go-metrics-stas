@@ -24,7 +24,7 @@ func NewServerConfig() *ServerConfig {
 
 	flag.StringVar(&cfg.ListenAddress, "a", "localhost:8080", "HTTP listen address (host:port)")
 	storeIntervalSec := flag.Int("i", 300, "Store interval in seconds (0 = sync write)")
-	flag.StringVar(&cfg.FileStoragePath, "f", "/tmp/metrics-db.json", "File to persist metrics")
+	flag.StringVar(&cfg.FileStoragePath, "f", "", "File to persist metrics (disabled by default)")
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore metrics from file on start")
 
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "PostgreSQL DSN (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
