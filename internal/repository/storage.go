@@ -2,8 +2,9 @@ package repository
 
 import (
 	"errors"
-	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"sync"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
 var (

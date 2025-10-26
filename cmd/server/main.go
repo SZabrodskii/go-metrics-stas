@@ -15,11 +15,8 @@ func main() {
 		logging.Module,
 		config.ProvideServerConfig(),
 		fx.Provide(
-			fx.Annotate(
-				repository.NewFileStorage,
-				fx.As(new(repository.Storage)),
-			),
 			db.New,
+			repository.NewStorage,
 			handler.NewMetricsHandler,
 			handler.NewPingHandler,
 			server.NewRouter,
