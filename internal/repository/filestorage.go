@@ -159,3 +159,19 @@ func (s *fileBackedStorage) loadFromFile() error {
 	}
 	return nil
 }
+
+func (s *fileBackedStorage) UpdateBatch(items []model.Metrics) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	_ = s.MemStorage.UpdateBatch(items)
+
+	if s.syncWrite {
+		if err := s.saveToFile(); err != nil {
+			s.logger.Error("sync save failed (batch)", zap.Error(err), zap.String("path", s.filePath))
+			return err
+		}
+	}
+	return nil
+}
