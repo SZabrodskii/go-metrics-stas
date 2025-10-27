@@ -18,6 +18,7 @@ type Storage interface {
 	GetGauge(id string) (float64, error)
 	GetCounter(id string) (int64, error)
 	GetAllMetrics() (map[string]model.Metrics, error)
+	UpdateBatch(items []model.Metrics) error
 }
 
 type MemStorage struct {
@@ -86,4 +87,26 @@ func (ms *MemStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 	}
 	return metrics, nil
+}
+
+func (ms *MemStorage) UpdateBatch(items []model.Metrics) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	for _, m := range items {
+		switch m.MType {
+		case model.Gauge:
+			if m.Value != nil {
+				ms.gauges[m.ID] = *m.Value
+			}
+		case model.Counter:
+			if m.Delta != nil {
+				ms.counters[m.ID] += *m.Delta
+			}
+		}
+	}
+	return nil
 }
