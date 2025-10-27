@@ -1,13 +1,16 @@
 package handler
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"html"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -265,4 +268,58 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+}
+
+func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	var reader io.Reader = r.Body
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(reader)
+		if err != nil {
+			http.Error(w, "invalid gzip body", http.StatusBadRequest)
+			return
+		}
+		defer zr.Close()
+		reader = zr
+	}
+	defer r.Body.Close()
+
+	var batch []model.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if len(batch) == 0 {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[]`))
+		return
+	}
+
+	for _, m := range batch {
+		if m.ID == "" || m.MType == "" {
+			http.Error(w, "id and type are required", http.StatusBadRequest)
+			return
+		}
+		switch m.MType {
+		case "gauge":
+			if m.Value == nil {
+				http.Error(w, "value is required for gauge", http.StatusBadRequest)
+				return
+			}
+			h.repo.UpdateGauge(m.ID, *m.Value)
+		case "counter":
+			if m.Delta == nil {
+				http.Error(w, "delta is required for counter", http.StatusBadRequest)
+				return
+			}
+			h.repo.UpdateCounter(m.ID, *m.Delta)
+		default:
+			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			return
+		}
+
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(batch)
 }

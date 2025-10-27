@@ -77,3 +77,52 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	}
 	return out, rows.Err()
 }
+
+func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmtGauge, err := tx.Prepare(`
+		INSERT INTO metrics (id,mtype,value,delta)
+		VALUES ($1,'gauge',$2,NULL)
+		ON CONFLICT (id,mtype)
+		DO UPDATE SET value=EXCLUDED.value, updated_at=now()`)
+	if err != nil {
+		return err
+	}
+	defer stmtGauge.Close()
+
+	stmtCounter, err := tx.Prepare(`
+		INSERT INTO metrics (id,mtype,value,delta)
+		VALUES ($1,'counter',$2,NULL)
+		ON CONFLICT (id,mtype)
+		DO UPDATE SET delta=metrics.delta+EXCLUDED.delta, updated_at=now()`)
+	if err != nil {
+		return err
+	}
+	defer stmtCounter.Close()
+
+	for _, m := range metrics {
+		switch m.MType {
+		case model.Gauge:
+			if m.Value != nil {
+				if _, err := stmtGauge.Exec(m.ID, *m.Value); err != nil {
+					return err
+				}
+			}
+		case model.Counter:
+			if m.Delta != nil {
+				if _, err := stmtCounter.Exec(m.ID, *m.Delta); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return tx.Commit()
+}

@@ -16,15 +16,19 @@ import (
 
 func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
 
 	r.Get("/ping", pingHandler)
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
+	r.Post("/update/", metricsHandler.UpdateMetricJSON)
 	r.Post("/value", metricsHandler.GetMetricValueJSON)
+	r.Post("/value/", metricsHandler.GetMetricValueJSON)
 	r.Get("/value/{type}/{name}", metricsHandler.GetMetricValue)
 	r.Get("/", metricsHandler.ListAllMetricsHTML)
+	r.Post("/updates", metricsHandler.UpdateBatchJSON)
+	r.Post("/updates/", metricsHandler.UpdateBatchJSON)
 
 	return r
 }
