@@ -89,14 +89,14 @@ func (ms *MemStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	return metrics, nil
 }
 
-func (ms *MemStorage) UpdateBatch(items []model.Metrics) error {
-	if len(items) == 0 {
+func (ms *MemStorage) UpdateBatch(metrics []model.Metrics) error {
+	if len(metrics) == 0 {
 		return nil
 	}
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	for _, m := range items {
+	for _, m := range metrics {
 		switch m.MType {
 		case model.Gauge:
 			if m.Value != nil {
