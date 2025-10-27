@@ -74,13 +74,29 @@ func (a *Agent) send() {
 	a.logger.Info("Sending metrics to server...")
 
 	a.mx.RLock()
-	defer a.mx.RUnlock()
-
-	if err := a.client.SendMetrics(a.currentMetrics); err != nil {
-		a.logger.Error("Error sending metrics", zap.Error(err))
-	} else {
-		a.logger.Info("Successfully sent metrics", zap.Int("count", len(a.currentMetrics)))
+	if len(a.currentMetrics) == 0 {
+		a.mx.RUnlock()
+		a.logger.Info("No metrics to send")
+		return
 	}
+
+	batch := make([]model.Metrics, 0, len(a.currentMetrics))
+	for _, m := range a.currentMetrics {
+		batch = append(batch, m)
+	}
+	a.mx.RUnlock()
+
+	if err := a.client.SendBatch(batch); err != nil {
+		a.logger.Warn("Batch send failed, fallback to single", zap.Error(err))
+		for _, m := range batch {
+			if err := a.client.SendMetric(m); err != nil {
+				a.logger.Error("Failed to send metric", zap.String("id", m.ID), zap.Error(err))
+			}
+		}
+	} else {
+		a.logger.Info("Successfully sent metrics to server", zap.Int("count", len(batch)))
+	}
+
 }
 
 var Module = fx.Options(
