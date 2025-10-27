@@ -22,7 +22,9 @@ func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerF
 
 	r.Post("/update/{type}/{name}/{value}", metricsHandler.UpdateMetric)
 	r.Post("/update", metricsHandler.UpdateMetricJSON)
+	r.Post("/update/", metricsHandler.UpdateMetricJSON)
 	r.Post("/value", metricsHandler.GetMetricValueJSON)
+	r.Post("/value/", metricsHandler.GetMetricValueJSON)
 	r.Get("/value/{type}/{name}", metricsHandler.GetMetricValue)
 	r.Get("/", metricsHandler.ListAllMetricsHTML)
 	r.Post("/updates", metricsHandler.UpdateBatchJSON)
