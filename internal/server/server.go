@@ -16,7 +16,7 @@ import (
 
 func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
 
 	r.Get("/ping", pingHandler)
 
