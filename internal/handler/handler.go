@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -265,4 +266,43 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+}
+
+func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	var list []model.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&list); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if len(list) == 0 {
+		http.Error(w, "empty batch", http.StatusBadRequest)
+		return
+	}
+
+	for i := range list {
+		if list[i].ID == "" || list[i].MType == "" {
+			http.Error(w, "id and type are required", http.StatusBadRequest)
+			return
+		}
+		switch list[i].MType {
+		case "gauge":
+			if list[i].Value == nil {
+				http.Error(w, "value is required for gauge", http.StatusBadRequest)
+				return
+			}
+		case "counter":
+			if list[i].Delta == nil {
+				http.Error(w, "delta is required for counter", http.StatusBadRequest)
+				return
+			}
+		}
+		if err := h.repo.UpdateBatch(list); err != nil {
+			http.Error(w, "failed to update batch", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(list)
+	}
 }
