@@ -101,18 +101,18 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) queryAllMetricsWithRetry() (*sql.Rows, error) {
-	var rows *sql.Rows
-	err := retryPG(func() error {
-		var qerr error
-		rows, qerr = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
-		return qerr
-	})
-	return rows, err
-}
-
 func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
-	rows, err := p.queryAllMetricsWithRetry()
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	for i := 0; i < len(retrySchedule)+1; i++ {
+		rows, err = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
+		if err == nil || !isPGConnException(err) || i == len(retrySchedule) {
+			break
+		}
+		time.Sleep(retrySchedule[i])
+	}
 	if err != nil {
 		return nil, err
 	}
