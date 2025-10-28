@@ -102,35 +102,33 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 }
 
 func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
-	var rows *sql.Rows
-	if err := retryPG(func() error {
-		var qerr error
-		rows, qerr = p.db.Query(`SELECT id,mtype,value,delta FROM metrics`)
-		return qerr
-	}); err != nil {
+	rows, err := p.db.Query(`SELECT id,mtype,value,delta FROM metrics`)
+	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
 	out := make(map[string]model.Metrics)
 
 	for rows.Next() {
-		var id, metricType string
-		var value sql.NullFloat64
-		var delta sql.NullInt64
+		var (
+			id, metricType string
+			value          sql.NullFloat64
+			delta          sql.NullInt64
+		)
 
 		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
 			return nil, err
 		}
+
 		m := model.Metrics{ID: id, MType: metricType}
 		if value.Valid {
-			val := value.Float64
-			m.Value = &val
+			v := value.Float64
+			m.Value = &v
 		}
 		if delta.Valid {
-			del := delta.Int64
-			m.Delta = &del
+			d := delta.Int64
+			m.Delta = &d
 		}
 		out[id] = m
 	}
