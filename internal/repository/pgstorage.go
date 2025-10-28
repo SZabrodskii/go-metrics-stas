@@ -101,7 +101,7 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
+func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr error) {
 	var rows *sql.Rows
 	if err := retryPG(func() error {
 		var qerr error
@@ -112,18 +112,26 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		return nil, err
 	}
 
-	defer rows.Close()
+	defer func() {
+		if rows != nil {
+			if cerr := rows.Close(); cerr != nil && retErr == nil {
+				retErr = cerr
+			}
+			if e := rows.Err(); e != nil && retErr == nil {
+				retErr = e
+			}
+		}
+	}()
 
-	out := make(map[string]model.Metrics)
-	var scanErr error
+	out = make(map[string]model.Metrics)
+
 	for rows.Next() {
 		var id, metricType string
 		var value sql.NullFloat64
 		var delta sql.NullInt64
 
 		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
-			scanErr = err
-			break
+			return nil, err
 		}
 		m := model.Metrics{ID: id, MType: metricType}
 		if value.Valid {
@@ -136,12 +144,7 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if scanErr != nil {
-		return nil, scanErr
-	}
+
 	return out, nil
 }
 
@@ -174,7 +177,7 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
           INSERT INTO metrics (id,mtype,value,delta)
           VALUES ($1,'counter',NULL,$2)
           ON CONFLICT (id,mtype)
-          DO UPDATE SET delta=COALEscE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`)
+          DO UPDATE SET delta=COALESCE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`)
 		if err != nil {
 			return err
 		}
