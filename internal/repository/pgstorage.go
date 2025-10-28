@@ -113,13 +113,15 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	defer func() { _ = rows.Close() }()
 
 	out := make(map[string]model.Metrics)
+	var scanErr error
 	for rows.Next() {
 		var id, metricType string
 		var value sql.NullFloat64
 		var delta sql.NullInt64
 
 		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
-			return nil, err
+			scanErr = err
+			break
 		}
 		m := model.Metrics{ID: id, MType: metricType}
 		if value.Valid {
@@ -132,9 +134,11 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-	iterErr := rows.Err()
-	if iterErr != nil {
-		return nil, iterErr
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if scanErr != nil {
+		return nil, scanErr
 	}
 	return out, nil
 }
