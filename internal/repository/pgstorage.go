@@ -101,29 +101,19 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr error) {
+func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	var rows *sql.Rows
 	if err := retryPG(func() error {
 		var qerr error
-
 		rows, qerr = p.db.Query(`SELECT id,mtype,value,delta FROM metrics`)
 		return qerr
 	}); err != nil {
 		return nil, err
 	}
 
-	defer func() {
-		if rows != nil {
-			if cerr := rows.Close(); cerr != nil && retErr == nil {
-				retErr = cerr
-			}
-			if e := rows.Err(); e != nil && retErr == nil {
-				retErr = e
-			}
-		}
-	}()
+	defer rows.Close()
 
-	out = make(map[string]model.Metrics)
+	out := make(map[string]model.Metrics)
 
 	for rows.Next() {
 		var id, metricType string
@@ -143,6 +133,10 @@ func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr 
 			m.Delta = &del
 		}
 		out[id] = m
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return out, nil
