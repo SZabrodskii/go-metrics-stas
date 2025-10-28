@@ -105,6 +105,7 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	var rows *sql.Rows
 	if err := retryPG(func() error {
 		var qerr error
+
 		rows, qerr = p.db.Query(`SELECT id,mtype,value,delta FROM metrics`)
 		return qerr
 	}); err != nil {
