@@ -101,33 +101,33 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
+func (p *postgresStorage) queryAllMetricsWithRetry() (*sql.Rows, error) {
 	var rows *sql.Rows
-	var err error
-
-	err = retryPG(func() error {
+	err := retryPG(func() error {
 		var qerr error
-		rows, qerr = p.db.Query(`SELECT id,mtype,value,delta FROM metrics`)
+		rows, qerr = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
 		return qerr
 	})
+	return rows, err
+}
 
+func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
+	rows, err := p.queryAllMetricsWithRetry()
 	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
 	out := make(map[string]model.Metrics)
-
 	for rows.Next() {
-		var id, metricType string
-		var value sql.NullFloat64
-		var delta sql.NullInt64
-
+		var (
+			id, metricType string
+			value          sql.NullFloat64
+			delta          sql.NullInt64
+		)
 		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
 			return nil, err
 		}
-
 		m := model.Metrics{ID: id, MType: metricType}
 		if value.Valid {
 			v := value.Float64
@@ -139,11 +139,9 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
 	return out, nil
 }
 
