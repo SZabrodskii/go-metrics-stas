@@ -27,7 +27,7 @@ func newMetricsClient(serverURL string) *metricsClient {
 	}
 }
 
-var retrySchedule = []time.Duration{1 * time.Second, 30 * time.Second, 5 * time.Second}
+var retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
 
 func shouldRetryHTTP(resp *http.Response, err error) bool {
 	if err != nil {
