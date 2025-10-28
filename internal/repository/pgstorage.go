@@ -110,7 +110,7 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	}); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make(map[string]model.Metrics)
 	for rows.Next() {
@@ -132,8 +132,9 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	iterErr := rows.Err()
+	if iterErr != nil {
+		return nil, iterErr
 	}
 	return out, nil
 }
