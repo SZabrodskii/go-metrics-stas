@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
@@ -19,8 +23,50 @@ type metricsClient struct {
 func newMetricsClient(serverURL string) *metricsClient {
 	return &metricsClient{
 		serverURL: serverURL,
-		client:    &http.Client{},
+		client:    &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+var retrySchedule = []time.Duration{1 * time.Second, 30 * time.Second, 5 * time.Second}
+
+func shouldRetryHTTP(resp *http.Response, err error) bool {
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			return true
+		}
+		return true
+	}
+
+	if resp != nil && resp.StatusCode >= 500 {
+		return true
+	}
+	return false
+}
+
+func (mc *metricsClient) doWithRetry(buildReq func() (*http.Request, error)) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	attempts := len(retrySchedule) + 1
+	for i := 0; i < attempts; i++ {
+		req, reqErr := buildReq()
+		if reqErr != nil {
+			return nil, reqErr
+		}
+
+		resp, err = mc.client.Do(req)
+		if !shouldRetryHTTP(resp, err) || i == len(retrySchedule) {
+			return resp, err
+		}
+
+		if resp != nil && resp.Body != nil {
+			io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		time.Sleep(retrySchedule[i])
+	}
+	return resp, err
 }
 
 func (mc *metricsClient) SendMetric(metric model.Metrics) error {
@@ -38,29 +84,32 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	payload.Delta = metric.Delta
 	payload.Value = metric.Value
 
-	var jb bytes.Buffer
-	if err := json.NewEncoder(&jb).Encode(&payload); err != nil {
-		return fmt.Errorf("could not encode metrics to json: %v", err)
+	buildReq := func() (*http.Request, error) {
+		var jb bytes.Buffer
+		if err := json.NewEncoder(&jb).Encode(&payload); err != nil {
+			return nil, fmt.Errorf("could not encode metrics to json: %v", err)
+		}
+
+		var gb bytes.Buffer
+		zw := gzip.NewWriter(&gb)
+		if _, err := zw.Write(jb.Bytes()); err != nil {
+			_ = zw.Close()
+			return nil, fmt.Errorf("could not compress metrics: %v", err)
+		}
+		if err := zw.Close(); err != nil {
+			return nil, fmt.Errorf("could not close gzip writer: %v", err)
+		}
+
+		req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		return req, nil
 	}
 
-	var gb bytes.Buffer
-	zw := gzip.NewWriter(&gb)
-	if _, err := zw.Write(jb.Bytes()); err != nil {
-		_ = zw.Close()
-		return fmt.Errorf("could not compress metrics: %v", err)
-	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("could not close gzip writer: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-
-	resp, err := mc.client.Do(req)
+	resp, err := mc.doWithRetry(buildReq)
 	if err != nil {
 		return err
 	}
@@ -91,29 +140,32 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	}
 	url := fmt.Sprintf("%s/updates", mc.serverURL)
 
-	var jb bytes.Buffer
-	if err := json.NewEncoder(&jb).Encode(&metrics); err != nil {
-		return fmt.Errorf("could not encode metrics to json: %v", err)
+	buildReq := func() (*http.Request, error) {
+		var jb bytes.Buffer
+		if err := json.NewEncoder(&jb).Encode(&metrics); err != nil {
+			return nil, fmt.Errorf("could not encode metrics to json: %v", err)
+		}
+
+		var gb bytes.Buffer
+		zw := gzip.NewWriter(&gb)
+		if _, err := zw.Write(jb.Bytes()); err != nil {
+			_ = zw.Close()
+			return nil, fmt.Errorf("could not compress metrics: %v", err)
+		}
+		if err := zw.Close(); err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		return req, nil
 	}
 
-	var gb bytes.Buffer
-	zw := gzip.NewWriter(&gb)
-	if _, err := zw.Write(jb.Bytes()); err != nil {
-		_ = zw.Close()
-		return fmt.Errorf("could not compress metrics: %v", err)
-	}
-	if err := zw.Close(); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-
-	resp, err := mc.client.Do(req)
+	resp, err := mc.doWithRetry(buildReq)
 	if err != nil {
 		return err
 	}
