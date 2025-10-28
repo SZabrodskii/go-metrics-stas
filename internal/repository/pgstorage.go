@@ -133,17 +133,14 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-	iterErr := rows.Err()
-	closeErr := rows.Close()
-
-	if iterErr != nil {
-		return nil, iterErr
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	if scanErr != nil {
 		return nil, scanErr
 	}
-	if closeErr != nil {
-		return nil, closeErr
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
