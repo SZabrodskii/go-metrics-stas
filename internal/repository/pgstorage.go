@@ -112,6 +112,8 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		return nil, err
 	}
 
+	defer rows.Close()
+
 	out := make(map[string]model.Metrics)
 	var scanErr error
 	for rows.Next() {
@@ -140,9 +142,6 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 	if scanErr != nil {
 		return nil, scanErr
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	return out, nil
 }
 
@@ -150,57 +149,53 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
 	if len(metrics) == 0 {
 		return nil
 	}
-	var tx *sql.Tx
-	if err := retryPG(func() error {
-		var berr error
-		tx, berr = p.db.Begin()
-		return berr
-	}); err != nil {
-		return err
-	}
-	defer tx.Rollback()
 
-	stmtGauge, err := tx.Prepare(`
-		INSERT INTO metrics (id,mtype,value,delta)
-		VALUES ($1,'gauge',$2,NULL)
-		ON CONFLICT (id,mtype)
-		DO UPDATE SET value=EXCLUDED.value, updated_at=now()`)
-	if err != nil {
-		return err
-	}
-	defer stmtGauge.Close()
+	return retryPG(func() error {
+		var tx *sql.Tx
+		var err error
 
-	stmtCounter, err := tx.Prepare(`
-		INSERT INTO metrics (id,mtype,value,delta)
-		VALUES ($1,'counter',NULL,$2)
-		ON CONFLICT (id,mtype)
-		DO UPDATE SET delta=COALESCE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`)
-	if err != nil {
-		return err
-	}
-	defer stmtCounter.Close()
+		tx, err = p.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
 
-	for _, m := range metrics {
-		switch m.MType {
-		case model.Gauge:
-			if m.Value != nil {
-				if err := retryPG(func() error {
-					_, e := stmtGauge.Exec(m.ID, *m.Value)
-					return e
-				}); err != nil {
-					return err
+		stmtGauge, err := tx.Prepare(`
+          INSERT INTO metrics (id,mtype,value,delta)
+          VALUES ($1,'gauge',$2,NULL)
+          ON CONFLICT (id,mtype)
+          DO UPDATE SET value=EXCLUDED.value, updated_at=now()`)
+		if err != nil {
+			return err
+		}
+		defer stmtGauge.Close()
+
+		stmtCounter, err := tx.Prepare(`
+          INSERT INTO metrics (id,mtype,value,delta)
+          VALUES ($1,'counter',NULL,$2)
+          ON CONFLICT (id,mtype)
+          DO UPDATE SET delta=COALEscE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`)
+		if err != nil {
+			return err
+		}
+		defer stmtCounter.Close()
+
+		for _, m := range metrics {
+			switch m.MType {
+			case model.Gauge:
+				if m.Value != nil {
+					if _, e := stmtGauge.Exec(m.ID, *m.Value); e != nil {
+						return e
+					}
 				}
-			}
-		case model.Counter:
-			if m.Delta != nil {
-				if err := retryPG(func() error {
-					_, e := stmtCounter.Exec(m.ID, *m.Delta)
-					return e
-				}); err != nil {
-					return err
+			case model.Counter:
+				if m.Delta != nil {
+					if _, e := stmtCounter.Exec(m.ID, *m.Delta); e != nil {
+						return e
+					}
 				}
 			}
 		}
-	}
-	return tx.Commit()
+		return tx.Commit()
+	})
 }
