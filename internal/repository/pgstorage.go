@@ -2,7 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,12 +26,24 @@ func newPostgresStorage(db *sql.DB) *postgresStorage {
 var retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
 
 func isPGConnException(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, driver.ErrBadConn) {
+		return true
+	}
+
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		if strings.HasPrefix(pgErr.Code, "08") {
+		code := string(pgErr.Code)
+		if strings.HasPrefix(code, "08") {
 			return true
 		}
-		switch pgErr.Code {
+		if strings.HasPrefix(code, "40") {
+			return true
+		}
+		switch code {
 		case pgerrcode.ConnectionException,
 			pgerrcode.ConnectionDoesNotExist,
 			pgerrcode.ConnectionFailure,
@@ -38,44 +52,62 @@ func isPGConnException(err error) bool {
 			pgerrcode.TransactionResolutionUnknown,
 			pgerrcode.ProtocolViolation:
 			return true
+
+		case pgerrcode.TransactionRollback,
+			pgerrcode.SerializationFailure,
+			pgerrcode.DeadlockDetected:
+			return true
+
+		case pgerrcode.CannotConnectNow:
+			return true
 		}
 	}
 	return false
 }
 
 func retryPG(fn func() error) error {
-	var err error
+	var lastErr error
 	attempts := len(retrySchedule) + 1
+
 	for i := 0; i < attempts; i++ {
-		err = fn()
-		if err == nil {
+		if err := fn(); err == nil {
 			return nil
+		} else {
+			lastErr = err
+			if !isPGConnException(err) || i == len(retrySchedule) {
+				return err
+			}
+			t := time.NewTimer(retrySchedule[i])
+			<-t.C
+			t.Stop()
 		}
-		if !isPGConnException(err) || i == len(retrySchedule) {
-			return err
-		}
-		time.Sleep(retrySchedule[i])
 	}
-	return err
+	return lastErr
 }
 
 func (p *postgresStorage) UpdateGauge(id string, value float64) {
 	_ = retryPG(func() error {
 		_, err := p.db.Exec(`INSERT INTO metrics (id,mtype,value,delta)
-	                   VALUES ($1,'gauge',$2,NULL)
-	                   ON CONFLICT (id,mtype)
-	                   DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, id, value)
-		return err
+			VALUES ($1,'gauge',$2,NULL)
+			ON CONFLICT (id,mtype)
+			DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, id, value)
+		if err != nil {
+			return fmt.Errorf("update gauge exec: %w", err)
+		}
+		return nil
 	})
 }
 
 func (p *postgresStorage) UpdateCounter(id string, delta int64) {
 	_ = retryPG(func() error {
 		_, err := p.db.Exec(`INSERT INTO metrics (id,mtype,value,delta)
-                    VALUES ($1,'counter',NULL,$2)
-                    ON CONFLICT (id,mtype)
-                    DO UPDATE SET delta=COALESCE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`, id, delta)
-		return err
+			VALUES ($1,'counter',NULL,$2)
+			ON CONFLICT (id,mtype)
+			DO UPDATE SET delta=COALESCE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`, id, delta)
+		if err != nil {
+			return fmt.Errorf("update counter exec: %w", err)
+		}
+		return nil
 	})
 }
 
@@ -84,7 +116,13 @@ func (p *postgresStorage) GetGauge(id string) (float64, error) {
 	err := retryPG(func() error {
 		return p.db.QueryRow(`SELECT value FROM metrics WHERE id = $1 AND mtype='gauge'`, id).Scan(&v)
 	})
-	if errors.Is(err, sql.ErrNoRows) || !v.Valid {
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrGaugeNotFound
+		}
+		return 0, err
+	}
+	if !v.Valid {
 		return 0, ErrGaugeNotFound
 	}
 	return v.Float64, nil
@@ -95,24 +133,33 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	err := retryPG(func() error {
 		return p.db.QueryRow(`SELECT delta FROM metrics WHERE id=$1 AND mtype='counter'`, id).Scan(&v)
 	})
-	if errors.Is(err, sql.ErrNoRows) || !v.Valid {
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrCounterNotFound
+		}
+		return 0, err
+	}
+	if !v.Valid {
 		return 0, ErrCounterNotFound
 	}
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
-	for i := 0; i < len(retrySchedule)+1; i++ {
-		rows, err = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
-		if err == nil || !isPGConnException(err) || i == len(retrySchedule) {
-			break
-		}
-		time.Sleep(retrySchedule[i])
+func (p *postgresStorage) queryAllMetrics() (*sql.Rows, error) {
+	var rows *sql.Rows
+
+	if err := retryPG(func() error {
+		var e error
+		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
+		return e
+	}); err != nil {
+		return nil, fmt.Errorf("query all metrics: %w", err)
 	}
+	return rows, nil
+}
+
+func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
+	rows, err := p.queryAllMetrics()
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +173,7 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 			delta          sql.NullInt64
 		)
 		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 		m := model.Metrics{ID: id, MType: metricType}
 		if value.Valid {
@@ -139,8 +186,8 @@ func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
 		}
 		out[id] = m
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to fetch all metrics: %w", err)
 	}
 	return out, nil
 }
@@ -156,7 +203,7 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
 
 		tx, err = p.db.Begin()
 		if err != nil {
-			return err
+			return fmt.Errorf("begin tx: %w", err)
 		}
 		defer tx.Rollback()
 
@@ -166,7 +213,7 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
           ON CONFLICT (id,mtype)
           DO UPDATE SET value=EXCLUDED.value, updated_at=now()`)
 		if err != nil {
-			return err
+			return fmt.Errorf("prepare gauge stmt: %w", err)
 		}
 		defer stmtGauge.Close()
 
@@ -176,7 +223,7 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
           ON CONFLICT (id,mtype)
           DO UPDATE SET delta=COALESCE(metrics.delta,0)+EXCLUDED.delta, updated_at=now()`)
 		if err != nil {
-			return err
+			return fmt.Errorf("prepare counter stmt: %w", err)
 		}
 		defer stmtCounter.Close()
 
@@ -185,17 +232,20 @@ func (p *postgresStorage) UpdateBatch(metrics []model.Metrics) error {
 			case model.Gauge:
 				if m.Value != nil {
 					if _, e := stmtGauge.Exec(m.ID, *m.Value); e != nil {
-						return e
+						return fmt.Errorf("exec gauge id=%q: %w", m.ID, e)
 					}
 				}
 			case model.Counter:
 				if m.Delta != nil {
 					if _, e := stmtCounter.Exec(m.ID, *m.Delta); e != nil {
-						return e
+						return fmt.Errorf("exec counter id=%q: %w", m.ID, e)
 					}
 				}
 			}
 		}
-		return tx.Commit()
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("commit tx: %w", err)
+		}
+		return nil
 	})
 }

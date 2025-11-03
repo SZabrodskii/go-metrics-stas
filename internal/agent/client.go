@@ -61,7 +61,12 @@ func (c *retryHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
 			t := time.NewTimer(c.retrySchedule[i-1])
-			<-t.C
+			select {
+			case <-t.C:
+			case <-req.Context().Done():
+				t.Stop()
+				return nil, req.Context().Err()
+			}
 			t.Stop()
 			_ = resetBody(req)
 		}
@@ -188,9 +193,9 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
-	batchBytes := jb.Bytes()
+	gzBytes := gb.Bytes()
 	req.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(batchBytes)), nil
+		return io.NopCloser(bytes.NewReader(gzBytes)), nil
 	}
 
 	resp, err := mc.client.Do(req)
