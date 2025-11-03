@@ -147,12 +147,19 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 
 func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	var rows *sql.Rows
+	var err error
 
-	if err := retryPG(func() error { //nolint:SA5002
-		var e error
-		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
-		return e
-	}); err != nil {
+	for i := 0; i < len(retrySchedule)+1; i++ {
+		rows, err = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
+		if err == nil || !isPGConnException(err) || i == len(retrySchedule) {
+			break
+		}
+
+		t := time.NewTimer(retrySchedule[i])
+		<-t.C
+		t.Stop()
+	}
+	if err != nil {
 		return fmt.Errorf("query all metrics: %w", err)
 	}
 	defer rows.Close()
