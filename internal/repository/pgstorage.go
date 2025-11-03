@@ -162,6 +162,9 @@ func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	if err != nil {
 		return fmt.Errorf("query all metrics: %w", err)
 	}
+	if rows == nil {
+		return fmt.Errorf("internal query logic error: rows is nil after successful queryЖ %w", err)
+	}
 	defer rows.Close()
 
 	if err := handle(rows); err != nil {
