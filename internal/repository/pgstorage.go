@@ -145,7 +145,7 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 	return v.Int64, nil
 }
 
-func (p *postgresStorage) queryAllMetrics() (*sql.Rows, error) {
+func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	var rows *sql.Rows
 
 	if err := retryPG(func() error {
@@ -153,45 +153,51 @@ func (p *postgresStorage) queryAllMetrics() (*sql.Rows, error) {
 		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
 		return e
 	}); err != nil {
-		return nil, fmt.Errorf("query all metrics: %w", err)
+		return fmt.Errorf("query all metrics: %w", err)
 	}
-	return rows, nil
-}
 
-func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr error) {
-	rows, err := p.queryAllMetrics()
-	if err != nil {
-		return nil, err
-	}
 	defer func() {
-		if e := rows.Close(); e != nil && retErr == nil {
-			retErr = fmt.Errorf("rows close: %w", e)
-		}
+		_ = rows.Close()
 	}()
 
-	out = make(map[string]model.Metrics)
-	for rows.Next() {
-		var (
-			id, metricType string
-			value          sql.NullFloat64
-			delta          sql.NullInt64
-		)
-		if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		m := model.Metrics{ID: id, MType: metricType}
-		if value.Valid {
-			v := value.Float64
-			m.Value = &v
-		}
-		if delta.Valid {
-			d := delta.Int64
-			m.Delta = &d
-		}
-		out[id] = m
+	if err := handle(rows); err != nil {
+		return err
 	}
+
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
+		return fmt.Errorf("rows iteration: %w", err)
+	}
+	return nil
+}
+
+func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
+
+	out := make(map[string]model.Metrics)
+	err := p.queryAllMetrics(func(rows *sql.Rows) error {
+		for rows.Next() {
+			var (
+				id, metricType string
+				value          sql.NullFloat64
+				delta          sql.NullInt64
+			)
+			if err := rows.Scan(&id, &metricType, &value, &delta); err != nil {
+				return fmt.Errorf("failed to scan row: %w", err)
+			}
+			m := model.Metrics{ID: id, MType: metricType}
+			if value.Valid {
+				v := value.Float64
+				m.Value = &v
+			}
+			if delta.Valid {
+				d := delta.Int64
+				m.Delta = &d
+			}
+			out[id] = m
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
