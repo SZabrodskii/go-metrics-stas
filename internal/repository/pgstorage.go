@@ -151,39 +151,26 @@ func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	if err := retryPG(func() error {
 		var e error
 		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
-		if e == nil || !isPGConnException(e) {
-			return fmt.Errorf("error while executing query: %w", e)
-		}
 		return e
 	}); err != nil {
 		return fmt.Errorf("query all metrics: %w", err)
 	}
+	defer rows.Close()
 
-	hErr := handle(rows)
-	iterErr := rows.Err()
-	if iterErr != nil {
-		iterErr = fmt.Errorf("rows iteration: %w", iterErr)
-	}
-
-	if hErr != nil && iterErr != nil {
-		return fmt.Errorf("%v; %w", hErr, iterErr)
-	}
-	if hErr != nil {
-		return hErr
-	}
-	if iterErr != nil {
-		return iterErr
-	}
-	defer func() {
-		if cerr := rows.Close(); cerr != nil && iterErr == nil && hErr == nil {
-			iterErr = fmt.Errorf("rows close: %w", cerr)
+	if err := handle(rows); err != nil {
+		if iterErr := rows.Err(); iterErr != nil {
+			return fmt.Errorf("%v; rows iteration: %w", err, iterErr)
 		}
-	}()
+		return err
+	}
+
+	if iterErr := rows.Err(); iterErr != nil {
+		return fmt.Errorf("rows iteration: %w", iterErr)
+	}
 	return nil
 }
 
 func (p *postgresStorage) GetAllMetrics() (map[string]model.Metrics, error) {
-
 	out := make(map[string]model.Metrics)
 	err := p.queryAllMetrics(func(rows *sql.Rows) error {
 		for rows.Next() {
