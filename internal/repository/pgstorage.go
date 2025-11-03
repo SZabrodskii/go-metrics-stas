@@ -156,17 +156,26 @@ func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 		return fmt.Errorf("query all metrics: %w", err)
 	}
 
+	hErr := handle(rows)
+	iterErr := rows.Err()
+	if iterErr != nil {
+		iterErr = fmt.Errorf("rows iteration: %w", iterErr)
+	}
+
+	if hErr != nil && iterErr != nil {
+		return fmt.Errorf("%v; %w", hErr, iterErr)
+	}
+	if hErr != nil {
+		return hErr
+	}
+	if iterErr != nil {
+		return iterErr
+	}
 	defer func() {
-		_ = rows.Close()
+		if cerr := rows.Close(); cerr != nil && iterErr == nil && hErr == nil {
+			iterErr = fmt.Errorf("rows close: %w", cerr)
+		}
 	}()
-
-	if err := handle(rows); err != nil {
-		return err
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("rows iteration: %w", err)
-	}
 	return nil
 }
 
