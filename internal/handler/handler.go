@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"html"
-	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -273,16 +271,6 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	var reader io.Reader = r.Body
-	if r.Header.Get("Content-Encoding") == "gzip" {
-		zr, err := gzip.NewReader(reader)
-		if err != nil {
-			http.Error(w, "invalid gzip body", http.StatusBadRequest)
-			return
-		}
-		defer zr.Close()
-		reader = zr
-	}
 	defer r.Body.Close()
 
 	var batch []model.Metrics

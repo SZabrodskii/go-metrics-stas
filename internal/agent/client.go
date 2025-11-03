@@ -4,22 +4,99 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 )
 
+var retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+type retryHTTPClient struct {
+	base          *http.Client
+	retrySchedule []time.Duration
+}
+
+func shouldRetryHTTP(resp *http.Response, err error) bool {
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			return true
+		}
+		return true
+	}
+
+	return resp != nil && resp.StatusCode >= 500
+}
+
+func (c *retryHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	resetBody := func(r *http.Request) error {
+		if r.GetBody == nil {
+			return nil
+		}
+		rc, gerr := r.GetBody()
+		if gerr != nil {
+			return gerr
+		}
+		if r.Body != nil {
+			_ = r.Body.Close()
+		}
+		r.Body = rc
+		return nil
+	}
+
+	attempts := len(c.retrySchedule) + 1
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			t := time.NewTimer(c.retrySchedule[i-1])
+			select {
+			case <-t.C:
+			case <-req.Context().Done():
+				t.Stop()
+				return nil, req.Context().Err()
+			}
+			t.Stop()
+			_ = resetBody(req)
+		}
+
+		resp, err = c.base.Do(req)
+		if !shouldRetryHTTP(resp, err) || i == len(c.retrySchedule) {
+			return resp, err
+
+		}
+
+		if resp != nil && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+	}
+	return resp, err
+}
+
 type metricsClient struct {
 	serverURL string
-	client    *http.Client
+	client    httpDoer
 }
 
 func newMetricsClient(serverURL string) *metricsClient {
 	return &metricsClient{
 		serverURL: serverURL,
-		client:    &http.Client{},
+		client: &retryHTTPClient{
+			base:          &http.Client{Timeout: 5 * time.Second},
+			retrySchedule: retrySchedule,
+		},
 	}
 }
 
@@ -40,25 +117,29 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 
 	var jb bytes.Buffer
 	if err := json.NewEncoder(&jb).Encode(&payload); err != nil {
-		return fmt.Errorf("could not encode metrics to json: %v", err)
+		return fmt.Errorf("encode metric json: %w", err)
 	}
 
 	var gb bytes.Buffer
 	zw := gzip.NewWriter(&gb)
 	if _, err := zw.Write(jb.Bytes()); err != nil {
 		_ = zw.Close()
-		return fmt.Errorf("could not compress metrics: %v", err)
+		return fmt.Errorf("could not compress metrics: %w", err)
 	}
 	if err := zw.Close(); err != nil {
-		return fmt.Errorf("could not close gzip writer: %v", err)
+		return fmt.Errorf("could not close gzip writer: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gb.Bytes()))
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	bodyBytes := gb.Bytes()
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+	}
 
 	resp, err := mc.client.Do(req)
 	if err != nil {
@@ -103,15 +184,19 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 		return fmt.Errorf("could not compress metrics: %v", err)
 	}
 	if err := zw.Close(); err != nil {
-		return err
+		return fmt.Errorf("close gzip writer: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(gb.Bytes()))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gb.Bytes()))
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	gzBytes := gb.Bytes()
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(gzBytes)), nil
+	}
 
 	resp, err := mc.client.Do(req)
 	if err != nil {
