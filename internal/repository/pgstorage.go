@@ -148,7 +148,7 @@ func (p *postgresStorage) GetCounter(id string) (int64, error) {
 func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	var rows *sql.Rows
 
-	if err := retryPG(func() error {
+	if err := retryPG(func() error { //nolint:SA5002
 		var e error
 		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
 		return e
