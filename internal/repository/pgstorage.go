@@ -151,6 +151,9 @@ func (p *postgresStorage) queryAllMetrics(handle func(*sql.Rows) error) error {
 	if err := retryPG(func() error {
 		var e error
 		rows, e = p.db.Query(`SELECT id, mtype, value, delta FROM metrics`)
+		if e == nil || !isPGConnException(e) {
+			return fmt.Errorf("error while executing query: %w", e)
+		}
 		return e
 	}); err != nil {
 		return fmt.Errorf("query all metrics: %w", err)
