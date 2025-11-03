@@ -164,9 +164,6 @@ func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr 
 		return nil, err
 	}
 	defer func() {
-		if e := rows.Err(); e != nil && retErr == nil {
-			retErr = fmt.Errorf("rows iteration: %w", e)
-		}
 		if e := rows.Close(); e != nil && retErr == nil {
 			retErr = fmt.Errorf("rows close: %w", e)
 		}
@@ -192,6 +189,9 @@ func (p *postgresStorage) GetAllMetrics() (out map[string]model.Metrics, retErr 
 			m.Delta = &d
 		}
 		out[id] = m
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 	return out, nil
 }
