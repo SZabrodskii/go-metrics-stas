@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -22,10 +23,21 @@ func VerifyHash(key string) func(handler http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			if r.Method != http.MethodPost {
 				next.ServeHTTP(w, r)
 				return
 			}
+
+			p := path.Clean(r.URL.Path)
+			if !strings.HasPrefix(p, "/update") || !strings.HasPrefix(p, "/updates") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			provided := r.Header.Get("HashSHA256")
 			if provided == "" {
 				http.Error(w, "missing HashSHA256", http.StatusBadRequest)
