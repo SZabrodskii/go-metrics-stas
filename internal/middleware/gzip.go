@@ -128,3 +128,33 @@ func (mc multiCloser) Close() error {
 	}
 	return firstErr
 }
+
+func CompressAndSign(key string, next http.Handler) http.Handler {
+	if key == "" {
+		return CompressAccepted(next)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cw := &contentWriter{ResponseWriter: w}
+		next.ServeHTTP(cw, r)
+
+		sum := hmacSHA256Hex(cw.buf.Bytes(), key)
+		if sum != "" {
+			cw.Header().Set("HashSHA256", sum)
+		}
+
+		ct := cw.Header().Get("Content-Type")
+		if !isCompressible(ct) || cw.statusOrDefault() >= 300 || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.WriteHeader(cw.statusOrDefault())
+			_, _ = w.Write(cw.buf.Bytes())
+			return
+		}
+
+		grw := &gzipResponseWriter{ResponseWriter: w, gw: gzip.NewWriter(w)}
+		defer grw.Close()
+
+		if !cw.headerSent {
+			grw.WriteHeader(cw.statusOrDefault())
+		}
+		_, _ = grw.Write(cw.buf.Bytes())
+	})
+}

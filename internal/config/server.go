@@ -17,6 +17,7 @@ type ServerConfig struct {
 	FileStoragePath string
 	Restore         bool
 	DatabaseDSN     string
+	Key             string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -28,6 +29,7 @@ func NewServerConfig() *ServerConfig {
 	flag.BoolVar(&cfg.Restore, "r", true, "Restore metrics from file on start")
 
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "PostgreSQL DSN (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
+	flag.StringVar(&cfg.Key, "k", "", "Signing key for HMAC-SHA256 (optional)")
 
 	flag.Parse()
 
@@ -62,6 +64,9 @@ func NewServerConfig() *ServerConfig {
 	}
 	if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		cfg.DatabaseDSN = v
+	}
+	if k, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = k
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 

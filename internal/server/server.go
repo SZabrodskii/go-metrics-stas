@@ -14,9 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
+func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
 
 	r.Get("/ping", pingHandler)
 
@@ -36,7 +36,7 @@ func NewRouter(metricsHandler *handler.MetricsHandler, pingHandler http.HandlerF
 func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logger *zap.Logger) *http.Server {
 	srv := &http.Server{
 		Addr:              cfg.ListenAddress,
-		Handler:           mw.CompressAccepted(router),
+		Handler:           mw.CompressAndSign(cfg.Key, router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	lc.Append(fx.Hook{

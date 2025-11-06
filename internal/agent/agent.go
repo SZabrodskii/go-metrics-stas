@@ -21,10 +21,10 @@ type Agent struct {
 	logger         *zap.Logger
 }
 
-func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, logger *zap.Logger) *Agent {
+func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, logger *zap.Logger) *Agent {
 	return &Agent{
 		collector:      newMetricsCollector(),
-		client:         newMetricsClient(serverURL),
+		client:         newMetricsClient(serverURL, key),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 		currentMetrics: make(map[string]model.Metrics),
@@ -102,7 +102,7 @@ func (a *Agent) send() {
 var Module = fx.Options(
 	fx.Provide(
 		func(cfg *config.AgentConfig, logger *zap.Logger) *Agent {
-			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, logger)
+			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, cfg.Key, logger)
 		},
 	),
 	fx.Invoke(runAgent),

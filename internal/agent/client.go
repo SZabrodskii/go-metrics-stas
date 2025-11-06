@@ -3,6 +3,9 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,16 +91,28 @@ func (c *retryHTTPClient) Do(req *http.Request) (*http.Response, error) {
 type metricsClient struct {
 	serverURL string
 	client    httpDoer
+	key       string
 }
 
-func newMetricsClient(serverURL string) *metricsClient {
+func newMetricsClient(serverURL string, key string) *metricsClient {
 	return &metricsClient{
 		serverURL: serverURL,
 		client: &retryHTTPClient{
 			base:          &http.Client{Timeout: 5 * time.Second},
 			retrySchedule: retrySchedule,
 		},
+		key: key,
 	}
+}
+
+func hmacSHA256Hex(b []byte, key string) string {
+	if key == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write(b)
+
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func (mc *metricsClient) SendMetric(metric model.Metrics) error {
@@ -136,6 +151,9 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	if mc.key != "" {
+		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
+	}
 	bodyBytes := gb.Bytes()
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
@@ -193,6 +211,9 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	if mc.key != "" {
+		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
+	}
 	gzBytes := gb.Bytes()
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(gzBytes)), nil
