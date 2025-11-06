@@ -15,6 +15,7 @@ type AgentConfig struct {
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	ServerAddress  string
+	Key            string
 }
 
 func NewAgentConfig() *AgentConfig {
@@ -23,6 +24,7 @@ func NewAgentConfig() *AgentConfig {
 	addrFlag := flag.String("a", "localhost:8080", "Metrics server address (host:port)")
 	reportSec := flag.Int("r", 10, "Report interval (seconds)")
 	pollSec := flag.Int("p", 2, "Poll interval (seconds)")
+	keyFlag := flag.String("k", "", "Signing key for HMAC-SHA256 (optional)")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -31,6 +33,7 @@ func NewAgentConfig() *AgentConfig {
 	cfg.ServerAddress = *addrFlag
 	cfg.ReportInterval = time.Duration(*reportSec) * time.Second
 	cfg.PollInterval = time.Duration(*pollSec) * time.Second
+	cfg.Key = *keyFlag
 
 	if addr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddress = addr
@@ -49,6 +52,11 @@ func NewAgentConfig() *AgentConfig {
 		}
 		cfg.PollInterval = time.Duration(n) * time.Second
 	}
+
+	if k, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = k
+	}
+
 	if !strings.HasPrefix(cfg.ServerAddress, "http://") && !strings.HasPrefix(cfg.ServerAddress, "https://") {
 		cfg.ServerAddress = "http://" + cfg.ServerAddress
 	}
