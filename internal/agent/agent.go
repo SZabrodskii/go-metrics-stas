@@ -249,6 +249,7 @@ var Module = fx.Options(
 			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, cfg.Key, cfg.RateLimit, logger)
 		},
 	),
+
 	fx.Invoke(runAgent),
 )
 
