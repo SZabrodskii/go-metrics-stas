@@ -16,6 +16,7 @@ type AgentConfig struct {
 	ReportInterval time.Duration
 	ServerAddress  string
 	Key            string
+	RateLimit      int
 }
 
 func NewAgentConfig() *AgentConfig {
@@ -25,6 +26,7 @@ func NewAgentConfig() *AgentConfig {
 	reportSec := flag.Int("r", 10, "Report interval (seconds)")
 	pollSec := flag.Int("p", 2, "Poll interval (seconds)")
 	keyFlag := flag.String("k", "", "Signing key for HMAC-SHA256 (optional)")
+	rateLimit := flag.Int("l", 1, "Maximum number of concurrent outgoing requests")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -34,6 +36,7 @@ func NewAgentConfig() *AgentConfig {
 	cfg.ReportInterval = time.Duration(*reportSec) * time.Second
 	cfg.PollInterval = time.Duration(*pollSec) * time.Second
 	cfg.Key = *keyFlag
+	cfg.RateLimit = *rateLimit
 
 	if addr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddress = addr
@@ -55,6 +58,18 @@ func NewAgentConfig() *AgentConfig {
 
 	if k, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = k
+	}
+
+	if v, ok := os.LookupEnv("RATE_LIMIT"); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			log.Fatalf("invalid value for RATE_LIMIT %q: %v", v, err)
+		}
+		cfg.RateLimit = n
+	}
+
+	if cfg.RateLimit <= 0 {
+		cfg.RateLimit = 1
 	}
 
 	if !strings.HasPrefix(cfg.ServerAddress, "http://") && !strings.HasPrefix(cfg.ServerAddress, "https://") {
