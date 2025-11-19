@@ -26,7 +26,7 @@ func NewAgentConfig() *AgentConfig {
 	reportSec := flag.Int("r", 10, "Report interval (seconds)")
 	pollSec := flag.Int("p", 2, "Poll interval (seconds)")
 	keyFlag := flag.String("k", "", "Signing key for HMAC-SHA256 (optional)")
-	rateLimit := flag.Int("l", 1, "Maximum number of concurrent outgoing requests")
+	rateLimit := flag.Int("l", 0, "Maximum number of concurrent outgoing requests (0 = unlimited)")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -63,9 +63,10 @@ func NewAgentConfig() *AgentConfig {
 	if v, ok := os.LookupEnv("RATE_LIMIT"); ok {
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 {
-			log.Fatalf("invalid value for RATE_LIMIT %q: %v", v, err)
+			log.Printf("invalid value for RATE_LIMIT %q: %v; keeping previous value %d", v, err, cfg.RateLimit)
+		} else {
+			cfg.RateLimit = n
 		}
-		cfg.RateLimit = n
 	}
 
 	if cfg.RateLimit <= 0 {
