@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -24,13 +24,13 @@ type Agent struct {
 	logger         *zap.Logger
 
 	rateLimit int
-	jobs      chan model.Metrics
+	jobs      chan []model.Metrics
 	workersWG sync.WaitGroup
 }
 
 func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, rateLimit int, logger *zap.Logger) *Agent {
-	if rateLimit <= 0 {
-		rateLimit = 1
+	if rateLimit < 0 {
+		rateLimit = 0
 	}
 
 	return &Agent{
@@ -45,9 +45,13 @@ func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.
 }
 
 func (a *Agent) startWorkers(ctx context.Context) {
+	if a.rateLimit <= 0 {
+		a.logger.Info("rate limiting disabled; sending batches synchronously")
+		return
+	}
 	a.logger.Info("starting workers pool", zap.Int("rateLimit", a.rateLimit))
 
-	a.jobs = make(chan model.Metrics, a.rateLimit)
+	a.jobs = make(chan []model.Metrics, a.rateLimit)
 
 	for i := 0; i < a.rateLimit; i++ {
 		a.workersWG.Add(1)
@@ -59,15 +63,23 @@ func (a *Agent) startWorkers(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return
-				case m, ok := <-a.jobs:
+				case batch, ok := <-a.jobs:
 					if !ok {
 						return
 					}
-					if err := a.client.SendMetric(m); err != nil {
-						a.logger.Error("failed to send metric",
-							zap.String("id", m.ID),
-							zap.Error(err),
-							zap.Int("worker", id))
+					if len(batch) == 0 {
+						continue
+					}
+					if err := a.client.SendBatch(batch); err != nil {
+						a.logger.Error("failed to send batch",
+							zap.Int("batch_size:", len(batch)),
+							zap.Int("worker", id),
+							zap.Error(err))
+					} else {
+						a.logger.Info("batch sent successfully",
+							zap.Int("batch_size:", len(batch)),
+							zap.Int("worker", id),
+						)
 					}
 				}
 			}
@@ -88,7 +100,6 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.startWorkers(ctx)
 
 	go a.dispatchLoop(ctx)
-
 	go a.collectSystemLoop(ctx)
 
 	a.collect()
@@ -96,12 +107,30 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			close(a.jobs)
-			a.workersWG.Wait()
+			if a.rateLimit > 0 && a.jobs != nil {
+				close(a.jobs)
+				a.workersWG.Wait()
+			}
 			return ctx.Err()
 		case <-pollTicker.C:
 			a.collect()
 		}
+	}
+}
+
+func (a *Agent) sendBatch(batch []model.Metrics) {
+	if len(batch) == 0 {
+		a.logger.Info("batch size is zero; no metrics to send")
+		return
+	}
+
+	if err := a.client.SendBatch(batch); err != nil {
+		a.logger.Error("failed to send batch",
+			zap.Int("count:", len(batch)),
+			zap.Error(err))
+	} else {
+		a.logger.Info("batch sent successfully to server",
+			zap.Int("count:", len(batch)))
 	}
 }
 
@@ -117,34 +146,6 @@ func (a *Agent) collect() {
 	}
 
 	a.logger.Info("Metrics collected", zap.Int("count", len(metrics)))
-}
-func (a *Agent) send() {
-	a.logger.Info("Sending metrics to server...")
-
-	a.mx.RLock()
-	if len(a.currentMetrics) == 0 {
-		a.mx.RUnlock()
-		a.logger.Info("No metrics to send")
-		return
-	}
-
-	batch := make([]model.Metrics, 0, len(a.currentMetrics))
-	for _, m := range a.currentMetrics {
-		batch = append(batch, m)
-	}
-	a.mx.RUnlock()
-
-	if err := a.client.SendBatch(batch); err != nil {
-		a.logger.Warn("Batch send failed, fallback to single", zap.Error(err))
-		for _, m := range batch {
-			if err := a.client.SendMetric(m); err != nil {
-				a.logger.Error("Failed to send metric", zap.String("id", m.ID), zap.Error(err))
-			}
-		}
-	} else {
-		a.logger.Info("Successfully sent metrics to server", zap.Int("count", len(batch)))
-	}
-
 }
 
 func (a *Agent) dispatchLoop(ctx context.Context) {
@@ -178,12 +179,15 @@ func (a *Agent) dispatchMetrics(ctx context.Context) {
 	}
 	a.mx.RUnlock()
 
-	for _, m := range snapshot {
-		select {
-		case <-ctx.Done():
-			return
-		case a.jobs <- m:
-		}
+	if a.rateLimit <= 0 || a.jobs == nil {
+		a.sendBatch(snapshot)
+		return
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case a.jobs <- snapshot:
 	}
 }
 
@@ -234,7 +238,7 @@ func (a *Agent) collectSystemMetrics() {
 
 	for i, p := range percentages {
 		v := p
-		id := fmt.Sprintf("CPUutilization%d", i+1)
+		id := "CPUutilization" + strconv.Itoa(i+1)
 		a.currentMetrics[id] = model.Metrics{
 			ID:    id,
 			MType: model.Gauge,
