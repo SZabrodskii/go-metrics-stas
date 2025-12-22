@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/SZabrodskii/go-metrics-stas/internal/audit"
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
 	"github.com/SZabrodskii/go-metrics-stas/internal/config/db"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
@@ -13,6 +14,7 @@ import (
 func main() {
 	fx.New(
 		logging.Module,
+		audit.Module,
 		config.ProvideServerConfig(),
 		fx.Provide(
 			db.New,
