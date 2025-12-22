@@ -7,10 +7,9 @@ import (
 )
 
 func TestServerConfig_Defaults(t *testing.T) {
-	// Clear environment variables
 	originalEnv := make(map[string]string)
 	envVars := []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL"}
-	
+
 	for _, envVar := range envVars {
 		originalEnv[envVar] = os.Getenv(envVar)
 		os.Unsetenv(envVar)
@@ -23,7 +22,6 @@ func TestServerConfig_Defaults(t *testing.T) {
 		}
 	}()
 
-	// Reset flags for test
 	cfg := &ServerConfig{}
 	cfg.ListenAddress = "localhost:8080"
 	cfg.StoreInterval = 300 * time.Second
@@ -34,7 +32,6 @@ func TestServerConfig_Defaults(t *testing.T) {
 	cfg.AuditFile = ""
 	cfg.AuditURL = ""
 
-	// Test default values
 	if cfg.ListenAddress != "localhost:8080" {
 		t.Errorf("Expected ListenAddress to be 'localhost:8080', got %s", cfg.ListenAddress)
 	}
@@ -99,14 +96,11 @@ func TestServerConfig_EnvVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variable
 			os.Setenv(tt.envVar, tt.envValue)
 			defer os.Unsetenv(tt.envVar)
 
-			// Create config with environment variable processing
 			cfg := &ServerConfig{}
-			
-			// Simulate environment variable processing
+
 			if v, ok := os.LookupEnv("ADDRESS"); ok {
 				cfg.ListenAddress = v
 			}

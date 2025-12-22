@@ -183,7 +183,6 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			Value: m.Value,
 		}
 
-		// Создаем и отправляем событие аудита
 		if h.publisher != nil {
 			event := audit.CreateAuditEvent(r, []string{m.ID})
 			h.publisher.Notify(event)
@@ -215,7 +214,6 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			Delta: &newVal,
 		}
 
-		// Создаем и отправляем событие аудита
 		if h.publisher != nil {
 			event := audit.CreateAuditEvent(r, []string{m.ID})
 			h.publisher.Notify(event)
@@ -330,7 +328,7 @@ func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request)
 		}
 
 	}
-	
+
 	if h.publisher != nil {
 		var metricNames []string
 		for _, m := range batch {
@@ -339,7 +337,7 @@ func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request)
 		event := audit.CreateAuditEvent(r, metricNames)
 		h.publisher.Notify(event)
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(batch)
 }

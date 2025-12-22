@@ -171,3 +171,60 @@ func TestGaugeReplacement(t *testing.T) {
 		t.Errorf("expected replaceGauge value to be %f, got %v", expected, metrics["replaceGauge"].Value)
 	}
 }
+
+func TestUpdateBatch(t *testing.T) {
+	storage := NewMemStorage()
+
+	value1 := 123.45
+	value2 := 678.90
+	delta1 := int64(10)
+	delta2 := int64(20)
+
+	batch := []model.Metrics{
+		{
+			ID:    "gauge1",
+			MType: model.Gauge,
+			Value: &value1,
+		},
+		{
+			ID:    "gauge2",
+			MType: model.Gauge,
+			Value: &value2,
+		},
+		{
+			ID:    "counter1",
+			MType: model.Counter,
+			Delta: &delta1,
+		},
+		{
+			ID:    "counter2",
+			MType: model.Counter,
+			Delta: &delta2,
+		},
+	}
+
+	err := storage.UpdateBatch(batch)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	gauge1, err := storage.GetGauge("gauge1")
+	if err != nil || gauge1 != 123.45 {
+		t.Errorf("expected gauge1 to be 123.45, got %v with error %v", gauge1, err)
+	}
+
+	gauge2, err := storage.GetGauge("gauge2")
+	if err != nil || gauge2 != 678.90 {
+		t.Errorf("expected gauge2 to be 678.90, got %v with error %v", gauge2, err)
+	}
+
+	counter1, err := storage.GetCounter("counter1")
+	if err != nil || counter1 != 10 {
+		t.Errorf("expected counter1 to be 10, got %v with error %v", counter1, err)
+	}
+
+	counter2, err := storage.GetCounter("counter2")
+	if err != nil || counter2 != 20 {
+		t.Errorf("expected counter2 to be 20, got %v with error %v", counter2, err)
+	}
+}
