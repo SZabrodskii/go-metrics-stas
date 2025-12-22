@@ -25,12 +25,7 @@ func TestServerConfig_Defaults(t *testing.T) {
 	cfg := &ServerConfig{}
 	cfg.ListenAddress = "localhost:8080"
 	cfg.StoreInterval = 300 * time.Second
-	cfg.FileStoragePath = ""
 	cfg.Restore = true
-	cfg.DatabaseDSN = ""
-	cfg.Key = ""
-	cfg.AuditFile = ""
-	cfg.AuditURL = ""
 
 	if cfg.ListenAddress != "localhost:8080" {
 		t.Errorf("Expected ListenAddress to be 'localhost:8080', got %s", cfg.ListenAddress)
