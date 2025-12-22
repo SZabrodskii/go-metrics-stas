@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SZabrodskii/go-metrics-stas/internal/audit"
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -15,14 +16,16 @@ import (
 )
 
 type MetricsHandler struct {
-	repo   repository.Storage
-	logger *zap.Logger
+	repo      repository.Storage
+	logger    *zap.Logger
+	publisher *audit.Publisher
 }
 
-func NewMetricsHandler(repo repository.Storage, logger *zap.Logger) *MetricsHandler {
+func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, publisher *audit.Publisher) *MetricsHandler {
 	return &MetricsHandler{
-		repo:   repo,
-		logger: logger,
+		repo:      repo,
+		logger:    logger,
+		publisher: publisher,
 	}
 }
 
@@ -53,6 +56,11 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
 		return
+	}
+
+	if h.publisher != nil {
+		event := audit.CreateAuditEvent(r, []string{metricName})
+		h.publisher.Notify(event)
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -174,6 +182,12 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			MType: "gauge",
 			Value: m.Value,
 		}
+
+		if h.publisher != nil {
+			event := audit.CreateAuditEvent(r, []string{m.ID})
+			h.publisher.Notify(event)
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
@@ -199,6 +213,12 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			MType: "counter",
 			Delta: &newVal,
 		}
+
+		if h.publisher != nil {
+			event := audit.CreateAuditEvent(r, []string{m.ID})
+			h.publisher.Notify(event)
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 
@@ -308,6 +328,16 @@ func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request)
 		}
 
 	}
+
+	if h.publisher != nil {
+		var metricNames []string
+		for _, m := range batch {
+			metricNames = append(metricNames, m.ID)
+		}
+		event := audit.CreateAuditEvent(r, metricNames)
+		h.publisher.Notify(event)
+	}
+
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(batch)
 }

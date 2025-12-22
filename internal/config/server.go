@@ -18,6 +18,8 @@ type ServerConfig struct {
 	Restore         bool
 	DatabaseDSN     string
 	Key             string
+	AuditFile       string
+	AuditURL        string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -30,6 +32,8 @@ func NewServerConfig() *ServerConfig {
 
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "PostgreSQL DSN (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
 	flag.StringVar(&cfg.Key, "k", "", "Signing key for HMAC-SHA256 (optional)")
+	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to audit log file (optional)")
+	flag.StringVar(&cfg.AuditURL, "audit-url", "", "URL for remote audit logging (optional)")
 
 	flag.Parse()
 
@@ -67,6 +71,12 @@ func NewServerConfig() *ServerConfig {
 	}
 	if k, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = k
+	}
+	if af, ok := os.LookupEnv("AUDIT_FILE"); ok {
+		cfg.AuditFile = af
+	}
+	if au, ok := os.LookupEnv("AUDIT_URL"); ok {
+		cfg.AuditURL = au
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 
