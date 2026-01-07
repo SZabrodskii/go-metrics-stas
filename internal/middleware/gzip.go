@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/SZabrodskii/go-metrics-stas/internal/pool"
 )
 
 type gzipResponseWriter struct {
@@ -38,7 +40,7 @@ func (w *gzipResponseWriter) Close() error {
 
 type contentWriter struct {
 	http.ResponseWriter
-	buf        bytes.Buffer
+	buf        *bytes.Buffer
 	status     int
 	headerSent bool
 }
@@ -72,7 +74,11 @@ func CompressAccepted(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		cw := &contentWriter{ResponseWriter: w}
+
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		cw := &contentWriter{ResponseWriter: w, buf: buf}
 		next.ServeHTTP(cw, r)
 
 		ct := cw.Header().Get("Content-Type")
@@ -82,14 +88,15 @@ func CompressAccepted(next http.Handler) http.Handler {
 			return
 		}
 
-		grw := &gzipResponseWriter{ResponseWriter: w, gw: gzip.NewWriter(w)}
-		defer grw.Close()
+		zw := pool.GetGzipWriter(w)
+		grw := &gzipResponseWriter{ResponseWriter: w, gw: zw}
 
 		if !cw.headerSent {
 			grw.WriteHeader(cw.statusOrDefault())
 		}
 
 		_, _ = grw.Write(cw.buf.Bytes())
+		pool.PutGzipWriter(zw)
 	})
 }
 
@@ -101,7 +108,7 @@ func Decompress(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enc := r.Header.Get("Content-Encoding")
 		if strings.EqualFold(enc, "gzip") && isCompressible(r.Header.Get("Content-Type")) {
-			gr, err := gzip.NewReader(r.Body)
+			gr, err := pool.GetGzipReader(r.Body)
 			if err != nil {
 				http.Error(w, "unable to decompress gzipped body", http.StatusBadRequest)
 				return
@@ -109,11 +116,20 @@ func Decompress(next http.Handler) http.Handler {
 			r.Body = struct {
 				io.Reader
 				io.Closer
-			}{Reader: gr, Closer: multiCloser{gr, r.Body}}
+			}{Reader: gr, Closer: pooledGzipReaderCloser{gr, r.Body}}
 		}
 		next.ServeHTTP(w, r)
-
 	})
+}
+
+type pooledGzipReaderCloser struct {
+	gr       *gzip.Reader
+	original io.Closer
+}
+
+func (c pooledGzipReaderCloser) Close() error {
+	pool.PutGzipReader(c.gr)
+	return c.original.Close()
 }
 
 type multiCloser []io.Closer
@@ -134,7 +150,10 @@ func CompressAndSign(key string, next http.Handler) http.Handler {
 		return CompressAccepted(next)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cw := &contentWriter{ResponseWriter: w}
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		cw := &contentWriter{ResponseWriter: w, buf: buf}
 		next.ServeHTTP(cw, r)
 
 		sum := hmacSHA256Hex(cw.buf.Bytes(), key)
@@ -149,12 +168,13 @@ func CompressAndSign(key string, next http.Handler) http.Handler {
 			return
 		}
 
-		grw := &gzipResponseWriter{ResponseWriter: w, gw: gzip.NewWriter(w)}
-		defer grw.Close()
+		zw := pool.GetGzipWriter(w)
+		grw := &gzipResponseWriter{ResponseWriter: w, gw: zw}
 
 		if !cw.headerSent {
 			grw.WriteHeader(cw.statusOrDefault())
 		}
 		_, _ = grw.Write(cw.buf.Bytes())
+		pool.PutGzipWriter(zw)
 	})
 }

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
+	"github.com/SZabrodskii/go-metrics-stas/internal/pool"
 )
 
 var retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
@@ -130,22 +130,27 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	payload.Delta = metric.Delta
 	payload.Value = metric.Value
 
-	var jb bytes.Buffer
-	if err := json.NewEncoder(&jb).Encode(&payload); err != nil {
+	jb := pool.GetBuffer()
+	defer pool.PutBuffer(jb)
+
+	if err := json.NewEncoder(jb).Encode(&payload); err != nil {
 		return fmt.Errorf("encode metric json: %w", err)
 	}
 
-	var gb bytes.Buffer
-	zw := gzip.NewWriter(&gb)
+	gb := pool.GetBuffer()
+	defer pool.PutBuffer(gb)
+
+	zw := pool.GetGzipWriter(gb)
 	if _, err := zw.Write(jb.Bytes()); err != nil {
-		_ = zw.Close()
+		pool.PutGzipWriter(zw)
 		return fmt.Errorf("could not compress metrics: %w", err)
 	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("could not close gzip writer: %w", err)
-	}
+	pool.PutGzipWriter(zw)
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gb.Bytes()))
+	bodyBytes := make([]byte, gb.Len())
+	copy(bodyBytes, gb.Bytes())
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -154,7 +159,6 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	if mc.key != "" {
 		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
 	}
-	bodyBytes := gb.Bytes()
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
 	}
@@ -190,22 +194,27 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	}
 	url := fmt.Sprintf("%s/updates", mc.serverURL)
 
-	var jb bytes.Buffer
-	if err := json.NewEncoder(&jb).Encode(&metrics); err != nil {
+	jb := pool.GetBuffer()
+	defer pool.PutBuffer(jb)
+
+	if err := json.NewEncoder(jb).Encode(&metrics); err != nil {
 		return fmt.Errorf("could not encode metrics to json: %v", err)
 	}
 
-	var gb bytes.Buffer
-	zw := gzip.NewWriter(&gb)
+	gb := pool.GetBuffer()
+	defer pool.PutBuffer(gb)
+
+	zw := pool.GetGzipWriter(gb)
 	if _, err := zw.Write(jb.Bytes()); err != nil {
-		_ = zw.Close()
+		pool.PutGzipWriter(zw)
 		return fmt.Errorf("could not compress metrics: %v", err)
 	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("close gzip writer: %w", err)
-	}
+	pool.PutGzipWriter(zw)
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gb.Bytes()))
+	gzBytes := make([]byte, gb.Len())
+	copy(gzBytes, gb.Bytes())
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gzBytes))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -214,7 +223,6 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	if mc.key != "" {
 		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
 	}
-	gzBytes := gb.Bytes()
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(gzBytes)), nil
 	}
