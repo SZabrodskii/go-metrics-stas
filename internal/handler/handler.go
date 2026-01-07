@@ -330,7 +330,7 @@ func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h.publisher != nil {
-		var metricNames []string
+		metricNames := make([]string, 0, len(batch))
 		for _, m := range batch {
 			metricNames = append(metricNames, m.ID)
 		}
