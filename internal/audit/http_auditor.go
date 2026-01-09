@@ -35,8 +35,8 @@ func (ha *HTTPAuditor) Update(event AuditEvent) error {
 
 	req, err := http.NewRequest(http.MethodPost, ha.url, bytes.NewBuffer(eventJSON))
 	if err != nil {
-		ha.logger.Error("failed to create HTTP request for audit", 
-			zap.String("url", ha.url), 
+		ha.logger.Error("failed to create HTTP request for audit",
+			zap.String("url", ha.url),
 			zap.Error(err))
 		return err
 	}
@@ -46,24 +46,24 @@ func (ha *HTTPAuditor) Update(event AuditEvent) error {
 
 	resp, err := ha.client.Do(req)
 	if err != nil {
-		ha.logger.Error("failed to send audit event via HTTP", 
-			zap.String("url", ha.url), 
+		ha.logger.Error("failed to send audit event via HTTP",
+			zap.String("url", ha.url),
 			zap.Error(err))
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = fmt.Errorf("HTTP audit request failed with status: %d %s", 
+		err = fmt.Errorf("HTTP audit request failed with status: %d %s",
 			resp.StatusCode, resp.Status)
-		ha.logger.Error("HTTP audit request failed", 
-			zap.String("url", ha.url), 
+		ha.logger.Error("HTTP audit request failed",
+			zap.String("url", ha.url),
 			zap.Int("status_code", resp.StatusCode),
 			zap.String("status", resp.Status))
 		return err
 	}
 
-	ha.logger.Debug("audit event sent via HTTP", 
+	ha.logger.Debug("audit event sent via HTTP",
 		zap.String("url", ha.url),
 		zap.Int("metrics_count", len(event.Metrics)),
 		zap.String("ip", event.IPAddress),
