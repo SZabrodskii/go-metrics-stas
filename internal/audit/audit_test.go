@@ -41,21 +41,21 @@ func TestCreateAuditEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/test", nil)
 			req.RemoteAddr = tt.remoteAddr
-			
+
 			for key, value := range tt.headers {
 				req.Header.Set(key, value)
 			}
-			
+
 			event := CreateAuditEvent(req, tt.metrics)
-			
+
 			if event.IPAddress != tt.expectedIP {
 				t.Errorf("Expected IP %s, got %s", tt.expectedIP, event.IPAddress)
 			}
-			
+
 			if len(event.Metrics) != len(tt.metrics) {
 				t.Errorf("Expected %d metrics, got %d", len(tt.metrics), len(event.Metrics))
 			}
-			
+
 			if event.Timestamp == 0 {
 				t.Error("Expected non-zero timestamp")
 			}
@@ -66,14 +66,14 @@ func TestCreateAuditEvent(t *testing.T) {
 func TestPublisher(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	publisher := NewPublisher(logger)
-	
+
 	auditor := &mockAuditor{id: "test"}
-	
+
 	publisher.Subscribe(auditor)
 	if _, exists := publisher.observers["test"]; !exists {
 		t.Error("Expected auditor to be subscribed")
 	}
-	
+
 	publisher.Unsubscribe(auditor)
 	if _, exists := publisher.observers["test"]; exists {
 		t.Error("Expected auditor to be unsubscribed")

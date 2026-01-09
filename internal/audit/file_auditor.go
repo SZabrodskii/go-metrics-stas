@@ -27,8 +27,8 @@ func (fa *FileAuditor) Update(event AuditEvent) error {
 
 	file, err := os.OpenFile(fa.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		fa.logger.Error("failed to open audit file", 
-			zap.String("path", fa.filePath), 
+		fa.logger.Error("failed to open audit file",
+			zap.String("path", fa.filePath),
 			zap.Error(err))
 		return err
 	}
@@ -41,17 +41,17 @@ func (fa *FileAuditor) Update(event AuditEvent) error {
 	}
 
 	if _, err := file.Write(append(eventJSON, '\n')); err != nil {
-		fa.logger.Error("failed to write to audit file", 
-			zap.String("path", fa.filePath), 
+		fa.logger.Error("failed to write to audit file",
+			zap.String("path", fa.filePath),
 			zap.Error(err))
 		return err
 	}
 
-	fa.logger.Debug("audit event written to file", 
+	fa.logger.Debug("audit event written to file",
 		zap.String("path", fa.filePath),
 		zap.Int("metrics_count", len(event.Metrics)),
 		zap.String("ip", event.IPAddress))
-	
+
 	return nil
 }
 

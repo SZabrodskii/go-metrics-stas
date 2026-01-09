@@ -6,32 +6,32 @@ const (
 )
 
 const (
-	MetricAlloc         = "Alloc"
-	MetricTotalAlloc    = "TotalAlloc"
-	MetricSys           = "Sys"
-	MetricLookups       = "Lookups"
-	MetricMallocs       = "Mallocs"
-	MetricFrees         = "Frees"
-	
-	MetricHeapAlloc     = "HeapAlloc"
-	MetricHeapSys       = "HeapSys"
-	MetricHeapIdle      = "HeapIdle"
-	MetricHeapInuse     = "HeapInuse"
-	MetricHeapReleased  = "HeapReleased"
-	MetricHeapObjects   = "HeapObjects"
-	
-	MetricStackInuse    = "StackInuse"
-	MetricStackSys      = "StackSys"
-	
-	MetricMSpanInuse    = "MSpanInuse"
-	MetricMSpanSys      = "MSpanSys"
-	
-	MetricMCacheInuse   = "MCacheInuse"
-	MetricMCacheSys     = "MCacheSys"
-	
-	MetricBuckHashSys   = "BuckHashSys"
-	MetricGCSys         = "GCSys"
-	MetricOtherSys      = "OtherSys"
+	MetricAlloc      = "Alloc"
+	MetricTotalAlloc = "TotalAlloc"
+	MetricSys        = "Sys"
+	MetricLookups    = "Lookups"
+	MetricMallocs    = "Mallocs"
+	MetricFrees      = "Frees"
+
+	MetricHeapAlloc    = "HeapAlloc"
+	MetricHeapSys      = "HeapSys"
+	MetricHeapIdle     = "HeapIdle"
+	MetricHeapInuse    = "HeapInuse"
+	MetricHeapReleased = "HeapReleased"
+	MetricHeapObjects  = "HeapObjects"
+
+	MetricStackInuse = "StackInuse"
+	MetricStackSys   = "StackSys"
+
+	MetricMSpanInuse = "MSpanInuse"
+	MetricMSpanSys   = "MSpanSys"
+
+	MetricMCacheInuse = "MCacheInuse"
+	MetricMCacheSys   = "MCacheSys"
+
+	MetricBuckHashSys = "BuckHashSys"
+	MetricGCSys       = "GCSys"
+	MetricOtherSys    = "OtherSys"
 
 	MetricNextGC        = "NextGC"
 	MetricLastGC        = "LastGC"
@@ -39,9 +39,9 @@ const (
 	MetricNumGC         = "NumGC"
 	MetricNumForcedGC   = "NumForcedGC"
 	MetricGCCPUFraction = "GCCPUFraction"
-	
-	MetricPollCount     = "PollCount"    
-	MetricRandomValue   = "RandomValue"  
+
+	MetricPollCount   = "PollCount"
+	MetricRandomValue = "RandomValue"
 )
 
 var GaugeMetrics = []string{

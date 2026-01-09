@@ -92,7 +92,3 @@ func parseXForwardedFor(header string) []string {
 	}
 	return ips
 }
-
-
-
-

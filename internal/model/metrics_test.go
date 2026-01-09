@@ -56,7 +56,7 @@ func TestMetricsSlices(t *testing.T) {
 	if len(CounterMetrics) == 0 {
 		t.Error("CounterMetrics should not be empty")
 	}
-	
+
 	expectedTotal := len(GaugeMetrics) + len(CounterMetrics)
 	if len(AllMetrics) != expectedTotal {
 		t.Errorf("Expected AllMetrics length %d, got %d", expectedTotal, len(AllMetrics))
