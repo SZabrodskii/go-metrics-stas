@@ -17,6 +17,9 @@ func hmacSHA256Hex(b []byte, key string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// VerifyHash возвращает middleware для проверки HMAC-SHA256 подписи запросов.
+// Проверяет заголовок HashSHA256 для POST запросов на /update и /updates.
+// Если key пустой, middleware пропускает все запросы без проверки.
 func VerifyHash(key string) func(handler http.Handler) http.Handler {
 	if key == "" {
 		return func(next http.Handler) http.Handler { return next }

@@ -28,6 +28,8 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// ZapRequestLogger возвращает middleware для логирования HTTP запросов.
+// Логирует метод, URI, статус, длительность, размер ответа и remote_addr.
 func ZapRequestLogger(log *zap.Logger) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

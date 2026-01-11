@@ -11,14 +11,22 @@ import (
 	"go.uber.org/fx"
 )
 
+// AgentConfig содержит конфигурацию агента сбора метрик.
 type AgentConfig struct {
-	PollInterval   time.Duration
+	// PollInterval — интервал сбора метрик.
+	PollInterval time.Duration
+	// ReportInterval — интервал отправки метрик на сервер.
 	ReportInterval time.Duration
-	ServerAddress  string
-	Key            string
-	RateLimit      int
+	// ServerAddress — адрес сервера метрик (http://host:port).
+	ServerAddress string
+	// Key — ключ для HMAC-SHA256 подписи (опционально).
+	Key string
+	// RateLimit — количество параллельных запросов (0 = без ограничений).
+	RateLimit int
 }
 
+// NewAgentConfig создаёт AgentConfig из флагов командной строки и переменных окружения.
+// Переменные окружения имеют приоритет над флагами.
 func NewAgentConfig() *AgentConfig {
 	cfg := &AgentConfig{}
 
@@ -79,6 +87,7 @@ func NewAgentConfig() *AgentConfig {
 	return cfg
 }
 
+// ProvideAgentConfig возвращает fx.Option для внедрения AgentConfig.
 func ProvideAgentConfig() fx.Option {
 	return fx.Provide(NewAgentConfig)
 }

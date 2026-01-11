@@ -1,3 +1,4 @@
+// Package agent реализует агент для сбора и отправки метрик на сервер.
 package agent
 
 import (
@@ -14,6 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// Agent собирает метрики из runtime и системы, отправляя их на сервер.
+// Поддерживает параллельную отправку через пул воркеров (rate limiting).
 type Agent struct {
 	collector      *metricsCollector
 	client         *metricsClient
@@ -28,6 +31,10 @@ type Agent struct {
 	workersWG sync.WaitGroup
 }
 
+// NewAgent создаёт новый экземпляр Agent.
+// serverURL — адрес сервера метрик, pollInterval — интервал сбора,
+// reportInterval — интервал отправки, key — ключ для HMAC подписи,
+// rateLimit — количество параллельных воркеров (0 — синхронная отправка).
 func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, rateLimit int, logger *zap.Logger) *Agent {
 	if rateLimit < 0 {
 		rateLimit = 0
@@ -87,6 +94,9 @@ func (a *Agent) startWorkers(ctx context.Context) {
 	}
 }
 
+// Run запускает главный цикл агента.
+// Собирает метрики с интервалом pollInterval и отправляет с интервалом reportInterval.
+// Блокируется до отмены контекста.
 func (a *Agent) Run(ctx context.Context) error {
 	a.logger.Info("Starting metrics agent",
 		zap.Duration("pollInterval", a.pollInterval),
@@ -247,6 +257,7 @@ func (a *Agent) collectSystemMetrics() {
 	}
 }
 
+// Module предоставляет fx модуль для внедрения зависимостей агента.
 var Module = fx.Options(
 	fx.Provide(
 		func(cfg *config.AgentConfig, logger *zap.Logger) *Agent {
