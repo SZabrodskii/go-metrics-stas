@@ -1,10 +1,15 @@
+// Package model содержит модели данных для системы сбора метрик.
 package model
 
+// Типы метрик, поддерживаемые системой.
 const (
+	// Counter представляет метрику-счётчик, значение которой накапливается.
 	Counter = "counter"
-	Gauge   = "gauge"
+	// Gauge представляет метрику-измеритель с произвольным значением.
+	Gauge = "gauge"
 )
 
+// Константы имён метрик, собираемых из runtime.MemStats.
 const (
 	MetricAlloc      = "Alloc"
 	MetricTotalAlloc = "TotalAlloc"
@@ -44,6 +49,7 @@ const (
 	MetricRandomValue = "RandomValue"
 )
 
+// GaugeMetrics содержит список всех gauge метрик, собираемых агентом.
 var GaugeMetrics = []string{
 	MetricAlloc, MetricTotalAlloc, MetricSys, MetricLookups, MetricMallocs, MetricFrees,
 	MetricHeapAlloc, MetricHeapSys, MetricHeapIdle, MetricHeapInuse, MetricHeapReleased, MetricHeapObjects,
@@ -55,12 +61,16 @@ var GaugeMetrics = []string{
 	MetricRandomValue,
 }
 
+// CounterMetrics содержит список всех counter метрик, собираемых агентом.
 var CounterMetrics = []string{
 	MetricPollCount,
 }
 
+// AllMetrics содержит объединённый список всех метрик (gauge и counter).
 var AllMetrics = append(GaugeMetrics, CounterMetrics...)
 
+// GetMetricType возвращает тип метрики по её имени.
+// Возвращает Counter для счётчиков и Gauge для всех остальных метрик.
 func GetMetricType(name string) string {
 	for _, metric := range CounterMetrics {
 		if metric == name {
@@ -70,15 +80,19 @@ func GetMetricType(name string) string {
 	return Gauge
 }
 
-// NOTE: Не усложняем пример, вводя иерархическую вложенность структур.
-// Органичиваясь плоской моделью.
-// Delta и Value объявлены через указатели,
-// что бы отличать значение "0", от не заданного значения
-// и соответственно не кодировать в структуру.
+// Metrics представляет единицу метрики для передачи между агентом и сервером.
+// Использует плоскую структуру без вложенности для простоты сериализации.
+// Delta и Value объявлены через указатели для различения нулевого значения
+// и отсутствующего поля при JSON-сериализации.
 type Metrics struct {
-	ID    string   `json:"id"`
-	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
+	// ID — уникальный идентификатор (имя) метрики.
+	ID string `json:"id"`
+	// MType — тип метрики: "counter" или "gauge".
+	MType string `json:"type"`
+	// Delta — значение счётчика (только для counter).
+	Delta *int64 `json:"delta,omitempty"`
+	// Value — значение измерения (только для gauge).
 	Value *float64 `json:"value,omitempty"`
-	Hash  string   `json:"hash,omitempty"`
+	// Hash — HMAC-подпись для верификации данных.
+	Hash string `json:"hash,omitempty"`
 }

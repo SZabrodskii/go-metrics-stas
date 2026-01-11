@@ -1,3 +1,4 @@
+// Package logging предоставляет конфигурацию логгера для приложения.
 package logging
 
 import (
@@ -7,8 +8,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// Module предоставляет fx модуль для внедрения zap.Logger.
 var Module = fx.Provide(NewLogger)
 
+// NewLogger создаёт production zap.Logger с автоматическим Sync при остановке.
 func NewLogger(lc fx.Lifecycle) (*zap.Logger, error) {
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)

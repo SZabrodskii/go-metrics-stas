@@ -1,3 +1,4 @@
+// Package server содержит HTTP сервер и маршрутизатор для API метрик.
 package server
 
 import (
@@ -15,6 +16,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// NewRouter создаёт и настраивает chi маршрутизатор со всеми эндпоинтами.
+// Включает middleware для логирования, сжатия, подписи и pprof профилирование.
 func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
@@ -45,6 +48,7 @@ func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler,
 	return r
 }
 
+// NewServer создаёт HTTP сервер с fx lifecycle хуками для graceful shutdown.
 func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logger *zap.Logger) *http.Server {
 	srv := &http.Server{
 		Addr:              cfg.ListenAddress,

@@ -1,3 +1,4 @@
+// Package config содержит конфигурацию сервера и агента.
 package config
 
 import (
@@ -11,17 +12,28 @@ import (
 	"go.uber.org/fx"
 )
 
+// ServerConfig содержит конфигурацию HTTP сервера метрик.
 type ServerConfig struct {
-	ListenAddress   string
-	StoreInterval   time.Duration
+	// ListenAddress — адрес для прослушивания (host:port).
+	ListenAddress string
+	// StoreInterval — интервал сохранения метрик в файл (0 = синхронная запись).
+	StoreInterval time.Duration
+	// FileStoragePath — путь к файлу для персистентного хранения метрик.
 	FileStoragePath string
-	Restore         bool
-	DatabaseDSN     string
-	Key             string
-	AuditFile       string
-	AuditURL        string
+	// Restore — восстанавливать ли метрики из файла при запуске.
+	Restore bool
+	// DatabaseDSN — строка подключения к PostgreSQL.
+	DatabaseDSN string
+	// Key — ключ для HMAC-SHA256 подписи (опционально).
+	Key string
+	// AuditFile — путь к файлу аудит-лога (опционально).
+	AuditFile string
+	// AuditURL — URL для удалённого аудит-лога (опционально).
+	AuditURL string
 }
 
+// NewServerConfig создаёт ServerConfig из флагов командной строки и переменных окружения.
+// Переменные окружения имеют приоритет над флагами.
 func NewServerConfig() *ServerConfig {
 	cfg := &ServerConfig{}
 
@@ -87,6 +99,7 @@ func NewServerConfig() *ServerConfig {
 
 }
 
+// ProvideServerConfig возвращает fx.Option для внедрения ServerConfig.
 func ProvideServerConfig() fx.Option {
 	return fx.Provide(NewServerConfig)
 }

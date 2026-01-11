@@ -1,3 +1,4 @@
+// Package middleware содержит HTTP middleware для сервера метрик.
 package middleware
 
 import (
@@ -68,6 +69,9 @@ func (cw *contentWriter) statusOrDefault() int {
 	return cw.status
 }
 
+// CompressAccepted возвращает middleware для gzip сжатия ответов.
+// Сжимает ответы только если клиент поддерживает gzip (Accept-Encoding: gzip)
+// и Content-Type является сжимаемым (application/json, text/html).
 func CompressAccepted(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
@@ -104,6 +108,8 @@ func isCompressible(encoding string) bool {
 	return strings.HasPrefix(encoding, "application/json") || strings.HasPrefix(encoding, "text/html")
 }
 
+// Decompress возвращает middleware для распаковки gzip-сжатых запросов.
+// Распаковывает тело запроса если Content-Encoding: gzip.
 func Decompress(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enc := r.Header.Get("Content-Encoding")
@@ -145,6 +151,9 @@ func (mc multiCloser) Close() error {
 	return firstErr
 }
 
+// CompressAndSign возвращает middleware для gzip сжатия и HMAC подписи ответов.
+// Добавляет заголовок HashSHA256 с подписью тела ответа.
+// Если key пустой, работает как CompressAccepted.
 func CompressAndSign(key string, next http.Handler) http.Handler {
 	if key == "" {
 		return CompressAccepted(next)

@@ -1,3 +1,4 @@
+// Package handler содержит HTTP обработчики для API метрик.
 package handler
 
 import (
@@ -15,12 +16,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// MetricsHandler обрабатывает HTTP запросы для работы с метриками.
+// Предоставляет эндпоинты для обновления и получения метрик.
 type MetricsHandler struct {
 	repo      repository.Storage
 	logger    *zap.Logger
 	publisher *audit.Publisher
 }
 
+// NewMetricsHandler создаёт новый экземпляр MetricsHandler.
+// Принимает хранилище, логгер и опциональный publisher для аудита.
 func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, publisher *audit.Publisher) *MetricsHandler {
 	return &MetricsHandler{
 		repo:      repo,
@@ -29,6 +34,8 @@ func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, publisher *a
 	}
 }
 
+// UpdateMetric обрабатывает POST /update/{type}/{name}/{value}.
+// Обновляет метрику, переданную через URL параметры.
 func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -68,6 +75,8 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
+// GetMetricValue обрабатывает GET /value/{type}/{name}.
+// Возвращает значение метрики в текстовом формате.
 func (h *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -101,6 +110,8 @@ func (h *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ListAllMetricsHTML обрабатывает GET /.
+// Возвращает HTML страницу со списком всех метрик.
 func (h *MetricsHandler) ListAllMetricsHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	allMetrics, err := h.repo.GetAllMetrics()
@@ -148,6 +159,9 @@ func (h *MetricsHandler) ListAllMetricsHTML(w http.ResponseWriter, r *http.Reque
 	_, _ = w.Write([]byte(builder.String()))
 }
 
+// UpdateMetricJSON обрабатывает POST /update.
+// Обновляет метрику, переданную в JSON формате.
+// Возвращает обновлённую метрику в JSON.
 func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
@@ -228,6 +242,8 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetMetricValueJSON обрабатывает POST /value.
+// Возвращает значение метрики в JSON формате.
 func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
@@ -288,6 +304,9 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 
 }
 
+// UpdateBatchJSON обрабатывает POST /updates.
+// Обновляет несколько метрик за один запрос (batch update).
+// Принимает массив метрик в JSON формате.
 func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 

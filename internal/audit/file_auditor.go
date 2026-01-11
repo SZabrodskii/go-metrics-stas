@@ -8,12 +8,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// FileAuditor реализует Observer для записи событий аудита в файл.
+// Потокобезопасен благодаря использованию mutex.
 type FileAuditor struct {
 	filePath string
 	logger   *zap.Logger
 	mu       sync.Mutex
 }
 
+// NewFileAuditor создаёт новый FileAuditor для записи в указанный файл.
 func NewFileAuditor(filePath string, logger *zap.Logger) *FileAuditor {
 	return &FileAuditor{
 		filePath: filePath,
@@ -21,6 +24,7 @@ func NewFileAuditor(filePath string, logger *zap.Logger) *FileAuditor {
 	}
 }
 
+// Update записывает событие аудита в файл в формате JSON (по одной строке на событие).
 func (fa *FileAuditor) Update(event AuditEvent) error {
 	fa.mu.Lock()
 	defer fa.mu.Unlock()
@@ -55,6 +59,7 @@ func (fa *FileAuditor) Update(event AuditEvent) error {
 	return nil
 }
 
+// GetID возвращает уникальный идентификатор аудитора.
 func (fa *FileAuditor) GetID() string {
 	return "file_auditor_" + fa.filePath
 }

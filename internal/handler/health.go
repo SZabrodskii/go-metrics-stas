@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// NewPingHandler создаёт обработчик GET /ping для проверки соединения с БД.
+// Возвращает 200 OK при успешном соединении, 500 при ошибке.
 func NewPingHandler(db *sql.DB, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if db == nil {

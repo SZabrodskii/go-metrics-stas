@@ -10,12 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// HTTPAuditor реализует Observer для отправки событий аудита по HTTP.
+// Отправляет события POST запросом в формате JSON.
 type HTTPAuditor struct {
 	url    string
 	client *http.Client
 	logger *zap.Logger
 }
 
+// NewHTTPAuditor создаёт новый HTTPAuditor для отправки на указанный URL.
 func NewHTTPAuditor(url string, logger *zap.Logger) *HTTPAuditor {
 	return &HTTPAuditor{
 		url: url,
@@ -26,6 +29,7 @@ func NewHTTPAuditor(url string, logger *zap.Logger) *HTTPAuditor {
 	}
 }
 
+// Update отправляет событие аудита POST запросом на настроенный URL.
 func (ha *HTTPAuditor) Update(event AuditEvent) error {
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
@@ -72,6 +76,7 @@ func (ha *HTTPAuditor) Update(event AuditEvent) error {
 	return nil
 }
 
+// GetID возвращает уникальный идентификатор аудитора.
 func (ha *HTTPAuditor) GetID() string {
 	return "http_auditor_" + ha.url
 }
