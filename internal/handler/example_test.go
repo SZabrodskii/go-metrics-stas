@@ -59,7 +59,8 @@ func Example_getMetricValueURL() {
 	defer ts.Close()
 
 	// First, set a gauge value
-	http.Post(ts.URL+"/update/gauge/cpu/75.5", "text/plain", nil)
+	setupResp, _ := http.Post(ts.URL+"/update/gauge/cpu/75.5", "text/plain", nil)
+	setupResp.Body.Close()
 
 	// Then retrieve it
 	resp, _ := http.Get(ts.URL + "/value/gauge/cpu")
@@ -154,7 +155,8 @@ func Example_getMetricValueJSON() {
 		"value": value,
 	}
 	jsonData, _ := json.Marshal(updatePayload)
-	http.Post(ts.URL+"/update", "application/json", bytes.NewBuffer(jsonData))
+	setupResp, _ := http.Post(ts.URL+"/update", "application/json", bytes.NewBuffer(jsonData))
+	setupResp.Body.Close()
 
 	// Then query it via JSON
 	queryPayload := map[string]string{
@@ -217,8 +219,10 @@ func Example_listAllMetricsHTML() {
 	defer ts.Close()
 
 	// First, add some metrics
-	http.Post(ts.URL+"/update/gauge/temp/25", "text/plain", nil)
-	http.Post(ts.URL+"/update/counter/hits/1", "text/plain", nil)
+	r1, _ := http.Post(ts.URL+"/update/gauge/temp/25", "text/plain", nil)
+	r1.Body.Close()
+	r2, _ := http.Post(ts.URL+"/update/counter/hits/1", "text/plain", nil)
+	r2.Body.Close()
 
 	// Get HTML listing
 	resp, _ := http.Get(ts.URL + "/")
