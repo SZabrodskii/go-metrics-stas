@@ -268,14 +268,15 @@ var Module = fx.Options(
 	fx.Invoke(runAgent),
 )
 
-func runAgent(lc fx.Lifecycle, agent *Agent, logger *zap.Logger) {
+func runAgent(lc fx.Lifecycle, agent *Agent, logger *zap.Logger, shutdowner fx.Shutdowner) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			go func() {
 				if err := agent.Run(ctx); err != nil && err != context.Canceled {
-					logger.Fatal("Failed to start agent", zap.Error(err))
+					logger.Error("Failed to start agent", zap.Error(err))
+					_ = shutdowner.Shutdown()
 				}
 			}()
 			return nil

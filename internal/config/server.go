@@ -3,7 +3,7 @@ package config
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -34,7 +34,8 @@ type ServerConfig struct {
 
 // NewServerConfig создаёт ServerConfig из флагов командной строки и переменных окружения.
 // Переменные окружения имеют приоритет над флагами.
-func NewServerConfig() *ServerConfig {
+// Возвращает ошибку, если переменные окружения содержат некорректные значения.
+func NewServerConfig() (*ServerConfig, error) {
 	cfg := &ServerConfig{}
 
 	flag.StringVar(&cfg.ListenAddress, "a", "localhost:8080", "HTTP listen address (host:port)")
@@ -51,30 +52,30 @@ func NewServerConfig() *ServerConfig {
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
 		if v == "" {
-			log.Fatalf("ADDRESS is set but empty")
+			return nil, fmt.Errorf("ADDRESS is set but empty")
 		}
 		cfg.ListenAddress = v
 	}
 	if v, ok := os.LookupEnv("STORE_INTERVAL"); ok {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			log.Fatalf("invalid STORE_INTERVAL %q: must be >= 0", v)
+			return nil, fmt.Errorf("invalid STORE_INTERVAL %q: must be >= 0", v)
 		}
 		*storeIntervalSec = n
 	}
 	if v, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		if v == "" {
-			log.Fatalf("FILE_STORAGE_PATH is set but empty")
+			return nil, fmt.Errorf("FILE_STORAGE_PATH is set but empty")
 		}
 		cfg.FileStoragePath = v
 	}
 	if v, ok := os.LookupEnv("RESTORE"); ok {
 		if v == "" {
-			log.Fatalf("RESTORE is set but empty")
+			return nil, fmt.Errorf("RESTORE is set but empty")
 		}
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			log.Fatalf("invalid RESTORE %q", v)
+			return nil, fmt.Errorf("invalid RESTORE %q: %w", v, err)
 		}
 		cfg.Restore = b
 	}
@@ -93,10 +94,9 @@ func NewServerConfig() *ServerConfig {
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 
 	if strings.HasPrefix(cfg.ListenAddress, "http://") || strings.HasPrefix(cfg.ListenAddress, "https://") {
-		log.Fatalf("invalid value for LISTEN_ADDRESS URL: %v", cfg.ListenAddress)
+		return nil, fmt.Errorf("invalid value for LISTEN_ADDRESS URL: %v", cfg.ListenAddress)
 	}
-	return cfg
-
+	return cfg, nil
 }
 
 // ProvideServerConfig возвращает fx.Option для внедрения ServerConfig.
