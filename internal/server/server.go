@@ -49,7 +49,7 @@ func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler,
 }
 
 // NewServer создаёт HTTP сервер с fx lifecycle хуками для graceful shutdown.
-func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logger *zap.Logger) *http.Server {
+func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logger *zap.Logger, shutdowner fx.Shutdowner) *http.Server {
 	srv := &http.Server{
 		Addr:              cfg.ListenAddress,
 		Handler:           mw.CompressAndSign(cfg.Key, router),
@@ -60,7 +60,8 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 			logger.Info("Starting server", zap.String("address", srv.Addr))
 			go func() {
 				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					logger.Fatal("Error starting server", zap.Error(err))
+					logger.Error("Error starting server", zap.Error(err))
+					_ = shutdowner.Shutdown()
 				}
 			}()
 			return nil

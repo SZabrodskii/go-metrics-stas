@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -27,7 +28,8 @@ type AgentConfig struct {
 
 // NewAgentConfig создаёт AgentConfig из флагов командной строки и переменных окружения.
 // Переменные окружения имеют приоритет над флагами.
-func NewAgentConfig() *AgentConfig {
+// Возвращает ошибку, если переменные окружения содержат некорректные значения.
+func NewAgentConfig() (*AgentConfig, error) {
 	cfg := &AgentConfig{}
 
 	addrFlag := flag.String("a", "localhost:8080", "Metrics server address (host:port)")
@@ -52,14 +54,14 @@ func NewAgentConfig() *AgentConfig {
 	if val, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
 		n, err := strconv.Atoi(val)
 		if err != nil {
-			log.Fatalf("invalid value for REPORT_INTERVAL %q: %v", val, err)
+			return nil, fmt.Errorf("invalid value for REPORT_INTERVAL %q: %w", val, err)
 		}
 		cfg.ReportInterval = time.Duration(n) * time.Second
 	}
 	if val, ok := os.LookupEnv("POLL_INTERVAL"); ok {
 		n, err := strconv.Atoi(val)
 		if err != nil {
-			log.Fatalf("invalid value for POLL_INTERVAL %q: %v", val, err)
+			return nil, fmt.Errorf("invalid value for POLL_INTERVAL %q: %w", val, err)
 		}
 		cfg.PollInterval = time.Duration(n) * time.Second
 	}
@@ -84,7 +86,7 @@ func NewAgentConfig() *AgentConfig {
 	if !strings.HasPrefix(cfg.ServerAddress, "http://") && !strings.HasPrefix(cfg.ServerAddress, "https://") {
 		cfg.ServerAddress = "http://" + cfg.ServerAddress
 	}
-	return cfg
+	return cfg, nil
 }
 
 // ProvideAgentConfig возвращает fx.Option для внедрения AgentConfig.
