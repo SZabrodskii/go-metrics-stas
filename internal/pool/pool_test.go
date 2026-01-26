@@ -138,3 +138,95 @@ func BenchmarkGzipWriterPool_WithoutPool(b *testing.B) {
 		_ = zw.Close()
 	}
 }
+
+// testResetter — тестовый тип, реализующий интерфейс Resetter.
+type testResetter struct {
+	value      string
+	resetCount int
+}
+
+func (t *testResetter) Reset() {
+	t.value = ""
+	t.resetCount++
+}
+
+func TestGenericPool_CreateAndGet(t *testing.T) {
+	p := New(func() *testResetter {
+		return &testResetter{value: "initial"}
+	})
+
+	obj := p.Get()
+	if obj == nil {
+		t.Fatal("expected non-nil object")
+	}
+
+	if obj.value != "initial" {
+		t.Errorf("expected value 'initial', got %q", obj.value)
+	}
+}
+
+func TestGenericPool_PutAndGet(t *testing.T) {
+	p := New(func() *testResetter {
+		return &testResetter{value: "initial"}
+	})
+
+	obj := p.Get()
+	obj.value = "modified"
+
+	p.Put(obj)
+
+	obj2 := p.Get()
+	if obj2.value != "" {
+		t.Errorf("expected empty value after Reset(), got %q", obj2.value)
+	}
+}
+
+func TestGenericPool_ResetCalledOnPut(t *testing.T) {
+	p := New(func() *testResetter {
+		return &testResetter{}
+	})
+
+	obj := p.Get()
+	initialResetCount := obj.resetCount
+
+	p.Put(obj)
+
+	obj2 := p.Get()
+	if obj2.resetCount != initialResetCount+1 {
+		t.Errorf("expected Reset() to be called once, resetCount: %d -> %d",
+			initialResetCount, obj2.resetCount)
+	}
+}
+
+func TestGenericPool_WithBytesBuffer(t *testing.T) {
+	p := New(func() *bytes.Buffer {
+		return new(bytes.Buffer)
+	})
+
+	buf := p.Get()
+	buf.WriteString("test data")
+
+	if buf.String() != "test data" {
+		t.Errorf("expected 'test data', got %q", buf.String())
+	}
+
+	p.Put(buf)
+
+	buf2 := p.Get()
+	if buf2.Len() != 0 {
+		t.Error("buffer should be reset after Put")
+	}
+}
+
+func BenchmarkGenericPool(b *testing.B) {
+	p := New(func() *bytes.Buffer {
+		return new(bytes.Buffer)
+	})
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		buf := p.Get()
+		buf.WriteString("test data for benchmarking")
+		p.Put(buf)
+	}
+}

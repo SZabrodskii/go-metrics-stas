@@ -87,3 +87,33 @@ func PutGzipReader(zr *gzip.Reader) {
 	_ = zr.Close()
 	GzipReaderPool.Put(zr)
 }
+
+// Resetter — интерфейс для типов с методом Reset().
+type Resetter interface {
+	Reset()
+}
+
+// Pool — generic пул объектов с методом Reset().
+type Pool[T Resetter] struct {
+	pool sync.Pool
+}
+
+// New создаёт новый пул с функцией-конструктором.
+func New[T Resetter](newFunc func() T) *Pool[T] {
+	return &Pool[T]{
+		pool: sync.Pool{
+			New: func() any { return newFunc() },
+		},
+	}
+}
+
+// Get возвращает объект из пула.
+func (p *Pool[T]) Get() T {
+	return p.pool.Get().(T)
+}
+
+// Put сбрасывает объект и возвращает его в пул.
+func (p *Pool[T]) Put(x T) {
+	x.Reset()
+	p.pool.Put(x)
+}
