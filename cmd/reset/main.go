@@ -345,15 +345,11 @@ func generateResetCode(info StructInfo) string {
 
 // generateFieldReset generates the reset code for a single field.
 func generateFieldReset(recv string, field FieldInfo) string {
-	fieldRef := fmt.Sprintf("%s.%s", recv, field.Name)
-
-	// Skip unexported fields from other packages (shouldn't happen in our case)
-	if field.Name == "" || !isExportedOrLocal(field.Name) {
-		// For unexported fields in the same package, we can still access them
-		if field.Name == "" {
-			return ""
-		}
+	if field.Name == "" {
+		return ""
 	}
+
+	fieldRef := fmt.Sprintf("%s.%s", recv, field.Name)
 
 	switch field.Kind {
 	case KindInt, KindFloat, KindComplex:
@@ -439,15 +435,6 @@ func generatePointerFieldReset(recv string, field FieldInfo) string {
 
 	buf.WriteString("\t}\n")
 	return buf.String()
-}
-
-// isExportedOrLocal checks if a field name is exported or is a local unexported field.
-func isExportedOrLocal(name string) bool {
-	if name == "" {
-		return false
-	}
-	// We handle both exported and unexported fields since we generate code in the same package
-	return true
 }
 
 // writeGeneratedFile writes the generated reset.gen.go file.
