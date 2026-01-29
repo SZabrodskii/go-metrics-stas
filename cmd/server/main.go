@@ -9,6 +9,7 @@ import (
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/SZabrodskii/go-metrics-stas/internal/server"
+	"github.com/SZabrodskii/go-metrics-stas/pkg/buildinfo"
 	"github.com/SZabrodskii/go-metrics-stas/pkg/logging"
 	"go.uber.org/fx"
 )
@@ -39,7 +40,8 @@ func printBuildInfo() {
 }
 
 func main() {
-	printBuildInfo()
+	buildinfo.Print()
+
 	fx.New(
 		logging.Module,
 		audit.Module,
@@ -53,6 +55,7 @@ func main() {
 		),
 		fx.Invoke(
 			server.NewServer,
+			handler.RegisterSignalHandler,
 		),
 	).Run()
 }

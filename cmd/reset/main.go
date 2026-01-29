@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -346,15 +345,11 @@ func generateResetCode(info StructInfo) string {
 
 // generateFieldReset generates the reset code for a single field.
 func generateFieldReset(recv string, field FieldInfo) string {
-	fieldRef := fmt.Sprintf("%s.%s", recv, field.Name)
-
-	// Skip unexported fields from other packages (shouldn't happen in our case)
-	if field.Name == "" || !isExportedOrLocal(field.Name) {
-		// For unexported fields in the same package, we can still access them
-		if field.Name == "" {
-			return ""
-		}
+	if field.Name == "" {
+		return ""
 	}
+
+	fieldRef := fmt.Sprintf("%s.%s", recv, field.Name)
 
 	switch field.Kind {
 	case KindInt, KindFloat, KindComplex:
@@ -442,15 +437,6 @@ func generatePointerFieldReset(recv string, field FieldInfo) string {
 	return buf.String()
 }
 
-// isExportedOrLocal checks if a field name is exported or is a local unexported field.
-func isExportedOrLocal(name string) bool {
-	if name == "" {
-		return false
-	}
-	// We handle both exported and unexported fields since we generate code in the same package
-	return true
-}
-
 // writeGeneratedFile writes the generated reset.gen.go file.
 func writeGeneratedFile(dir string, structs []StructInfo) error {
 	if len(structs) == 0 {
@@ -485,9 +471,4 @@ func writeGeneratedFile(dir string, structs []StructInfo) error {
 	// Write to file
 	filePath := filepath.Join(dir, "reset.gen.go")
 	return os.WriteFile(filePath, formatted, 0644)
-}
-
-// Helper function to check if rune is uppercase (for export check).
-func isUpper(r rune) bool {
-	return unicode.IsUpper(r)
 }

@@ -117,15 +117,38 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			if a.rateLimit > 0 && a.jobs != nil {
-				close(a.jobs)
-				a.workersWG.Wait()
-			}
 			return ctx.Err()
 		case <-pollTicker.C:
 			a.collect()
 		}
 	}
+}
+
+// Shutdown выполняет graceful shutdown агента
+func (a *Agent) Shutdown() {
+	a.logger.Info("Sending final metrics before shutdown")
+
+	// Отправляем накопленные метрики синхронно
+	a.mx.RLock()
+	if len(a.currentMetrics) > 0 {
+		snapshot := make([]model.Metrics, 0, len(a.currentMetrics))
+		for _, m := range a.currentMetrics {
+			snapshot = append(snapshot, m)
+		}
+		a.mx.RUnlock()
+
+		a.sendBatch(snapshot)
+	} else {
+		a.mx.RUnlock()
+	}
+
+	// Закрываем канал воркеров и ждём их завершения
+	if a.rateLimit > 0 && a.jobs != nil {
+		close(a.jobs)
+		a.workersWG.Wait()
+	}
+
+	a.logger.Info("Final metrics sent, workers stopped")
 }
 
 func (a *Agent) sendBatch(batch []model.Metrics) {
@@ -281,9 +304,25 @@ func runAgent(lc fx.Lifecycle, agent *Agent, logger *zap.Logger, shutdowner fx.S
 			}()
 			return nil
 		},
-		OnStop: func(context.Context) error {
-			logger.Info("Agent stopped")
+		OnStop: func(ctx context.Context) error {
+			logger.Info("Initiating agent graceful shutdown")
 			cancel()
+
+			shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer shutdownCancel()
+
+			done := make(chan struct{})
+			go func() {
+				agent.Shutdown()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				logger.Info("Agent graceful shutdown completed")
+			case <-shutdownCtx.Done():
+				logger.Warn("Agent shutdown timed out")
+			}
 			return nil
 		},
 	})

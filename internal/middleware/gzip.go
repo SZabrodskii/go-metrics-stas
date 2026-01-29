@@ -138,19 +138,6 @@ func (c pooledGzipReaderCloser) Close() error {
 	return c.original.Close()
 }
 
-type multiCloser []io.Closer
-
-func (mc multiCloser) Close() error {
-	var firstErr error
-	for _, c := range mc {
-		if err := c.Close(); err != nil && firstErr == nil {
-			firstErr = err
-
-		}
-	}
-	return firstErr
-}
-
 // CompressAndSign возвращает middleware для gzip сжатия и HMAC подписи ответов.
 // Добавляет заголовок HashSHA256 с подписью тела ответа.
 // Если key пустой, работает как CompressAccepted.
