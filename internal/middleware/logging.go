@@ -1,10 +1,11 @@
 package middleware
 
 import (
-	"github.com/go-chi/chi/v5/middleware"
-	"go.uber.org/zap"
 	"net/http"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
+	"go.uber.org/zap"
 )
 
 type responseData struct {

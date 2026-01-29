@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -485,9 +484,4 @@ func writeGeneratedFile(dir string, structs []StructInfo) error {
 	// Write to file
 	filePath := filepath.Join(dir, "reset.gen.go")
 	return os.WriteFile(filePath, formatted, 0644)
-}
-
-// Helper function to check if rune is uppercase (for export check).
-func isUpper(r rune) bool {
-	return unicode.IsUpper(r)
 }
