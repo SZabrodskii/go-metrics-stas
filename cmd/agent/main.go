@@ -12,6 +12,6 @@ func main() {
 		logging.Module,
 		config.ProvideAgentConfig(),
 		agent.Module,
+		fx.Invoke(agent.RegisterSignalHandler),
 	).Run()
-
 }

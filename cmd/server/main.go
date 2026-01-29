@@ -25,6 +25,7 @@ func main() {
 		),
 		fx.Invoke(
 			server.NewServer,
+			server.RegisterSignalHandler,
 		),
 	).Run()
 }
