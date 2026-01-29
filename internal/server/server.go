@@ -5,9 +5,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/pprof"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
@@ -77,26 +74,4 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 		},
 	})
 	return srv
-}
-
-// RegisterSignalHandler регистрирует обработчик сигналов для graceful shutdown.
-func RegisterSignalHandler(lc fx.Lifecycle, logger *zap.Logger, shutdowner fx.Shutdowner) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
-
-	lc.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			go func() {
-				sig := <-sigChan
-				logger.Info("Received signal, initiating graceful shutdown", zap.String("signal", sig.String()))
-				_ = shutdowner.Shutdown()
-			}()
-			return nil
-		},
-		OnStop: func(_ context.Context) error {
-			signal.Stop(sigChan)
-			close(sigChan)
-			return nil
-		},
-	})
 }
