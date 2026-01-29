@@ -69,15 +69,24 @@ func NewFileStorage(lc fx.Lifecycle, cfg *config.ServerConfig, logger *zap.Logge
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			s.logger.Info("Initiating storage graceful shutdown")
 			close(s.stopCh)
 			done := make(chan struct{})
 			go func() { s.wg.Wait(); close(done) }()
 
 			select {
 			case <-done:
+				s.logger.Info("Storage background workers stopped")
 			case <-ctx.Done():
+				s.logger.Warn("Storage shutdown timed out waiting for workers")
 			}
-			return s.saveToFile()
+
+			if err := s.saveToFile(); err != nil {
+				s.logger.Error("Failed to save metrics on shutdown", zap.Error(err))
+				return err
+			}
+			s.logger.Info("Metrics saved successfully on shutdown", zap.String("path", s.filePath))
+			return nil
 		},
 	})
 	return s, nil
