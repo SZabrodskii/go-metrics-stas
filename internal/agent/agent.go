@@ -3,11 +3,14 @@ package agent
 
 import (
 	"context"
+	"crypto/rsa"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
+	appcrypto "github.com/SZabrodskii/go-metrics-stas/internal/crypto"
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -35,14 +38,14 @@ type Agent struct {
 // serverURL — адрес сервера метрик, pollInterval — интервал сбора,
 // reportInterval — интервал отправки, key — ключ для HMAC подписи,
 // rateLimit — количество параллельных воркеров (0 — синхронная отправка).
-func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, rateLimit int, logger *zap.Logger) *Agent {
+func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, rateLimit int, publicKey *rsa.PublicKey, logger *zap.Logger) *Agent {
 	if rateLimit < 0 {
 		rateLimit = 0
 	}
 
 	return &Agent{
 		collector:      newMetricsCollector(),
-		client:         newMetricsClient(serverURL, key),
+		client:         newMetricsClient(serverURL, key, publicKey),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 		currentMetrics: make(map[string]model.Metrics),
@@ -283,13 +286,30 @@ func (a *Agent) collectSystemMetrics() {
 // Module предоставляет fx модуль для внедрения зависимостей агента.
 var Module = fx.Options(
 	fx.Provide(
-		func(cfg *config.AgentConfig, logger *zap.Logger) *Agent {
-			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, cfg.Key, cfg.RateLimit, logger)
+		func(cfg *config.AgentConfig, logger *zap.Logger) (*Agent, error) {
+			pubKey, err := loadPublicKey(cfg.CryptoKey, logger)
+			if err != nil {
+				return nil, err
+			}
+			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, cfg.Key, cfg.RateLimit, pubKey, logger), nil
 		},
 	),
 
 	fx.Invoke(runAgent),
 )
+
+func loadPublicKey(path string, logger *zap.Logger) (*rsa.PublicKey, error) {
+	if path == "" {
+		return nil, nil
+	}
+	key, err := appcrypto.LoadPublicKey(path)
+	if err != nil {
+		logger.Error("failed to load RSA public key", zap.String("path", path), zap.Error(err))
+		return nil, fmt.Errorf("load RSA public key %s: %w", path, err)
+	}
+	logger.Info("RSA public key loaded for encryption", zap.String("path", path))
+	return key, nil
+}
 
 func runAgent(lc fx.Lifecycle, agent *Agent, logger *zap.Logger, shutdowner fx.Shutdowner) {
 	ctx, cancel := context.WithCancel(context.Background())

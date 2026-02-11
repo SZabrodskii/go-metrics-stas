@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	appcrypto "github.com/SZabrodskii/go-metrics-stas/internal/crypto"
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/pool"
 )
@@ -92,16 +94,18 @@ type metricsClient struct {
 	serverURL string
 	client    httpDoer
 	key       string
+	publicKey *rsa.PublicKey
 }
 
-func newMetricsClient(serverURL string, key string) *metricsClient {
+func newMetricsClient(serverURL string, key string, publicKey *rsa.PublicKey) *metricsClient {
 	return &metricsClient{
 		serverURL: serverURL,
 		client: &retryHTTPClient{
 			base:          &http.Client{Timeout: 5 * time.Second},
 			retrySchedule: retrySchedule,
 		},
-		key: key,
+		key:       key,
+		publicKey: publicKey,
 	}
 }
 
@@ -149,6 +153,11 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 
 	bodyBytes := make([]byte, gb.Len())
 	copy(bodyBytes, gb.Bytes())
+
+	bodyBytes, err := appcrypto.Encrypt(bodyBytes, mc.publicKey)
+	if err != nil {
+		return fmt.Errorf("encrypt body: %w", err)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
@@ -213,6 +222,11 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 
 	gzBytes := make([]byte, gb.Len())
 	copy(gzBytes, gb.Bytes())
+
+	gzBytes, err := appcrypto.Encrypt(gzBytes, mc.publicKey)
+	if err != nil {
+		return fmt.Errorf("encrypt body: %w", err)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gzBytes))
 	if err != nil {

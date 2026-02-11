@@ -24,6 +24,8 @@ type AgentConfig struct {
 	Key string
 	// RateLimit — количество параллельных запросов (0 = без ограничений).
 	RateLimit int
+	// CryptoKey — путь к файлу публичного RSA-ключа для шифрования (опционально).
+	CryptoKey string
 }
 
 // NewAgentConfig создаёт AgentConfig из флагов командной строки и переменных окружения.
@@ -37,6 +39,7 @@ func NewAgentConfig() (*AgentConfig, error) {
 	pollSec := flag.Int("p", 2, "Poll interval (seconds)")
 	keyFlag := flag.String("k", "", "Signing key for HMAC-SHA256 (optional)")
 	rateLimit := flag.Int("l", 0, "Maximum number of concurrent outgoing requests (0 = unlimited)")
+	cryptoKeyFlag := flag.String("crypto-key", "", "Path to RSA public key PEM file for encryption (optional)")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -47,6 +50,7 @@ func NewAgentConfig() (*AgentConfig, error) {
 	cfg.PollInterval = time.Duration(*pollSec) * time.Second
 	cfg.Key = *keyFlag
 	cfg.RateLimit = *rateLimit
+	cfg.CryptoKey = *cryptoKeyFlag
 
 	if addr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddress = addr
@@ -68,6 +72,10 @@ func NewAgentConfig() (*AgentConfig, error) {
 
 	if k, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = k
+	}
+
+	if v, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = v
 	}
 
 	if v, ok := os.LookupEnv("RATE_LIMIT"); ok {
