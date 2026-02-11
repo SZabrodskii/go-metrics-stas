@@ -26,6 +26,8 @@ type ServerConfig struct {
 	DatabaseDSN string
 	// Key — ключ для HMAC-SHA256 подписи (опционально).
 	Key string
+	// CryptoKey — путь к файлу приватного RSA-ключа для дешифрования (опционально).
+	CryptoKey string
 	// AuditFile — путь к файлу аудит-лога (опционально).
 	AuditFile string
 	// AuditURL — URL для удалённого аудит-лога (опционально).
@@ -45,6 +47,7 @@ func NewServerConfig() (*ServerConfig, error) {
 
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "PostgreSQL DSN (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
 	flag.StringVar(&cfg.Key, "k", "", "Signing key for HMAC-SHA256 (optional)")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "Path to RSA private key PEM file for decryption (optional)")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to audit log file (optional)")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "URL for remote audit logging (optional)")
 
@@ -90,6 +93,9 @@ func NewServerConfig() (*ServerConfig, error) {
 	}
 	if au, ok := os.LookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = au
+	}
+	if v, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = v
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 

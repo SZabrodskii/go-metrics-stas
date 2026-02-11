@@ -3,11 +3,14 @@ package server
 
 import (
 	"context"
+	"crypto/rsa"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"time"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
+	appcrypto "github.com/SZabrodskii/go-metrics-stas/internal/crypto"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	mw "github.com/SZabrodskii/go-metrics-stas/internal/middleware"
 	"github.com/go-chi/chi/v5"
@@ -18,9 +21,14 @@ import (
 
 // NewRouter создаёт и настраивает chi маршрутизатор со всеми эндпоинтами.
 // Включает middleware для логирования, сжатия, подписи и pprof профилирование.
-func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) *chi.Mux {
+func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler, pingHandler http.HandlerFunc, logger *zap.Logger) (*chi.Mux, error) {
+	privateKey, err := loadPrivateKey(cfg.CryptoKey, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decrypt(privateKey), mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
 
 	r.HandleFunc("/debug/pprof/", pprof.Index)
 	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -45,7 +53,7 @@ func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler,
 	r.Post("/updates", metricsHandler.UpdateBatchJSON)
 	r.Post("/updates/", metricsHandler.UpdateBatchJSON)
 
-	return r
+	return r, nil
 }
 
 // NewServer создаёт HTTP сервер с fx lifecycle хуками для graceful shutdown.
@@ -74,4 +82,17 @@ func NewServer(lc fx.Lifecycle, router *chi.Mux, cfg *config.ServerConfig, logge
 		},
 	})
 	return srv
+}
+
+func loadPrivateKey(path string, logger *zap.Logger) (*rsa.PrivateKey, error) {
+	if path == "" {
+		return nil, nil
+	}
+	key, err := appcrypto.LoadPrivateKey(path)
+	if err != nil {
+		logger.Error("failed to load RSA private key", zap.String("path", path), zap.Error(err))
+		return nil, fmt.Errorf("load RSA private key %s: %w", path, err)
+	}
+	logger.Info("RSA private key loaded for decryption", zap.String("path", path))
+	return key, nil
 }
