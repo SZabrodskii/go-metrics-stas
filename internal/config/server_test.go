@@ -1,120 +1,173 @@
 package config
 
 import (
+	"flag"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestServerConfig_Defaults(t *testing.T) {
-	originalEnv := make(map[string]string)
-	envVars := []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL"}
+func resetFlagsAndArgs() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	os.Args = []string{"test"}
+}
 
-	for _, envVar := range envVars {
-		originalEnv[envVar] = os.Getenv(envVar)
-		os.Unsetenv(envVar)
-	}
-	defer func() {
-		for _, envVar := range envVars {
-			if val, exists := originalEnv[envVar]; exists {
-				os.Setenv(envVar, val)
-			}
-		}
-	}()
-
-	cfg := &ServerConfig{}
-	cfg.ListenAddress = "localhost:8080"
-	cfg.StoreInterval = 300 * time.Second
-	cfg.Restore = true
-
-	if cfg.ListenAddress != "localhost:8080" {
-		t.Errorf("Expected ListenAddress to be 'localhost:8080', got %s", cfg.ListenAddress)
-	}
-
-	if cfg.StoreInterval != 300*time.Second {
-		t.Errorf("Expected StoreInterval to be 300s, got %v", cfg.StoreInterval)
-	}
-
-	if cfg.Restore != true {
-		t.Errorf("Expected Restore to be true, got %v", cfg.Restore)
+func clearServerEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "CRYPTO_KEY", "AUDIT_FILE", "AUDIT_URL", "CONFIG"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
 	}
 }
 
-func TestServerConfig_EnvVars(t *testing.T) {
-	tests := []struct {
-		name     string
-		envVar   string
-		envValue string
-		check    func(*ServerConfig) bool
-	}{
-		{
-			name:     "ADDRESS env var",
-			envVar:   "ADDRESS",
-			envValue: "localhost:9090",
-			check: func(cfg *ServerConfig) bool {
-				return cfg.ListenAddress == "localhost:9090"
-			},
-		},
-		{
-			name:     "DATABASE_DSN env var",
-			envVar:   "DATABASE_DSN",
-			envValue: "postgres://test",
-			check: func(cfg *ServerConfig) bool {
-				return cfg.DatabaseDSN == "postgres://test"
-			},
-		},
-		{
-			name:     "KEY env var",
-			envVar:   "KEY",
-			envValue: "secret123",
-			check: func(cfg *ServerConfig) bool {
-				return cfg.Key == "secret123"
-			},
-		},
-		{
-			name:     "AUDIT_FILE env var",
-			envVar:   "AUDIT_FILE",
-			envValue: "/tmp/audit.log",
-			check: func(cfg *ServerConfig) bool {
-				return cfg.AuditFile == "/tmp/audit.log"
-			},
-		},
-		{
-			name:     "AUDIT_URL env var",
-			envVar:   "AUDIT_URL",
-			envValue: "http://example.com/audit",
-			check: func(cfg *ServerConfig) bool {
-				return cfg.AuditURL == "http://example.com/audit"
-			},
-		},
-	}
+func writeTempJSON(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "config-*.json")
+	require.NoError(t, err)
+	_, err = f.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	return f.Name()
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(tt.envVar, tt.envValue)
-			defer os.Unsetenv(tt.envVar)
+func TestServerConfig_Defaults(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
 
-			cfg := &ServerConfig{}
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
 
-			if v, ok := os.LookupEnv("ADDRESS"); ok {
-				cfg.ListenAddress = v
-			}
-			if v, ok := os.LookupEnv("DATABASE_DSN"); ok {
-				cfg.DatabaseDSN = v
-			}
-			if v, ok := os.LookupEnv("KEY"); ok {
-				cfg.Key = v
-			}
-			if v, ok := os.LookupEnv("AUDIT_FILE"); ok {
-				cfg.AuditFile = v
-			}
-			if v, ok := os.LookupEnv("AUDIT_URL"); ok {
-				cfg.AuditURL = v
-			}
+	assert.Equal(t, "localhost:8080", cfg.ListenAddress)
+	assert.Equal(t, 300*time.Second, cfg.StoreInterval)
+	assert.True(t, cfg.Restore)
+	assert.Empty(t, cfg.FileStoragePath)
+	assert.Empty(t, cfg.DatabaseDSN)
+	assert.Empty(t, cfg.CryptoKey)
+}
 
-			if !tt.check(cfg) {
-				t.Errorf("Environment variable %s=%s not properly set", tt.envVar, tt.envValue)
-			}
-		})
-	}
+func TestServerConfig_JSONConfig(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{
+		"address": "0.0.0.0:9090",
+		"restore": false,
+		"store_interval": "10s",
+		"store_file": "/tmp/metrics.db",
+		"database_dsn": "postgres://localhost/test",
+		"crypto_key": "/tmp/key.pem"
+	}`)
+
+	os.Args = []string{"test", "-c", path}
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "0.0.0.0:9090", cfg.ListenAddress)
+	assert.False(t, cfg.Restore)
+	assert.Equal(t, 10*time.Second, cfg.StoreInterval)
+	assert.Equal(t, "/tmp/metrics.db", cfg.FileStoragePath)
+	assert.Equal(t, "postgres://localhost/test", cfg.DatabaseDSN)
+	assert.Equal(t, "/tmp/key.pem", cfg.CryptoKey)
+}
+
+func TestServerConfig_JSONViaConfigEnv(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{"address": "10.0.0.1:3000"}`)
+	t.Setenv("CONFIG", path)
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "10.0.0.1:3000", cfg.ListenAddress)
+}
+
+func TestServerConfig_FlagOverridesJSON(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{"address": "json-host:1111"}`)
+	os.Args = []string{"test", "-c", path, "-a", "flag-host:2222"}
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "flag-host:2222", cfg.ListenAddress)
+}
+
+func TestServerConfig_EnvOverridesJSON(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{"address": "json-host:1111"}`)
+	os.Args = []string{"test", "-c", path}
+	t.Setenv("ADDRESS", "env-host:3333")
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "env-host:3333", cfg.ListenAddress)
+}
+
+func TestServerConfig_InvalidJSON(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{invalid`)
+	os.Args = []string{"test", "-c", path}
+
+	_, err := NewServerConfig()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "parsing config file")
+}
+
+func TestServerConfig_MissingConfigFile(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	os.Args = []string{"test", "-c", "/nonexistent/config.json"}
+
+	_, err := NewServerConfig()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "reading config file")
+}
+
+func TestServerConfig_InvalidStoreIntervalInJSON(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{"store_interval": "not-a-duration"}`)
+	os.Args = []string{"test", "-c", path}
+
+	_, err := NewServerConfig()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid store_interval")
+}
+
+func TestServerConfig_RestoreFalseFromJSON(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	path := writeTempJSON(t, `{"restore": false}`)
+	os.Args = []string{"test", "-c", path}
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.False(t, cfg.Restore)
+}
+
+func TestServerConfig_NoConfigFile(t *testing.T) {
+	resetFlagsAndArgs()
+	clearServerEnv(t)
+
+	cfg, err := NewServerConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "localhost:8080", cfg.ListenAddress)
 }
