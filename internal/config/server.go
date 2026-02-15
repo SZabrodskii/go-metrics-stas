@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,15 @@ import (
 
 	"go.uber.org/fx"
 )
+
+type serverJSONConfig struct {
+	Address       string `json:"address"`
+	Restore       *bool  `json:"restore"`
+	StoreInterval string `json:"store_interval"`
+	StoreFile     string `json:"store_file"`
+	DatabaseDSN   string `json:"database_dsn"`
+	CryptoKey     string `json:"crypto_key"`
+}
 
 // ServerConfig содержит конфигурацию HTTP сервера метрик.
 type ServerConfig struct {
@@ -51,7 +61,60 @@ func NewServerConfig() (*ServerConfig, error) {
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to audit log file (optional)")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "URL for remote audit logging (optional)")
 
+	var configPath string
+
+	flag.StringVar(&configPath, "c", "", "Path to JSON config file")
+	flag.StringVar(&configPath, "config", "", "Path to JSON config file (same as -c)")
+
 	flag.Parse()
+
+	setFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	if configPath == "" {
+		configPath = os.Getenv("CONFIG")
+	}
+	if configPath != "" {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading config file %s: %w", configPath, err)
+		}
+		var jc serverJSONConfig
+
+		if err := json.Unmarshal(data, &jc); err != nil {
+			return nil, fmt.Errorf("parsing config file %s: %w", configPath, err)
+		}
+
+		if jc.Address != "" && !setFlags["a"] {
+			cfg.ListenAddress = jc.Address
+		}
+
+		if jc.Restore != nil && !setFlags["r"] {
+			cfg.Restore = *jc.Restore
+		}
+
+		if jc.StoreInterval != "" && !setFlags["i"] {
+			d, err := time.ParseDuration(jc.StoreInterval)
+			if err != nil {
+				return nil, fmt.Errorf("invalid store_interval in config file: %w", err)
+			}
+			*storeIntervalSec = int(d.Seconds())
+		}
+
+		if jc.StoreFile != "" && !setFlags["f"] {
+			cfg.FileStoragePath = jc.StoreFile
+		}
+
+		if jc.DatabaseDSN != "" && !setFlags["d"] {
+			cfg.DatabaseDSN = jc.DatabaseDSN
+		}
+
+		if jc.CryptoKey != "" && !setFlags["crypto-key"] {
+			cfg.CryptoKey = jc.CryptoKey
+		}
+	}
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
 		if v == "" {

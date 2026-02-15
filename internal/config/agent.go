@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +12,13 @@ import (
 
 	"go.uber.org/fx"
 )
+
+type agentJSONConfig struct {
+	Address        string `json:"address"`
+	ReportInterval string `json:"report_interval"`
+	PollInterval   string `json:"poll_interval"`
+	CryptoKey      string `json:"crypto_key"`
+}
 
 // AgentConfig содержит конфигурацию агента сбора метрик.
 type AgentConfig struct {
@@ -41,6 +49,10 @@ func NewAgentConfig() (*AgentConfig, error) {
 	rateLimit := flag.Int("l", 0, "Maximum number of concurrent outgoing requests (0 = unlimited)")
 	cryptoKeyFlag := flag.String("crypto-key", "", "Path to RSA public key PEM file for encryption (optional)")
 
+	var configPath string
+	flag.StringVar(&configPath, "c", "", "Path to JSON config file")
+	flag.StringVar(&configPath, "config", "", "Path to JSON config file (same as -c)")
+
 	if !flag.Parsed() {
 		flag.Parse()
 	}
@@ -51,6 +63,48 @@ func NewAgentConfig() (*AgentConfig, error) {
 	cfg.Key = *keyFlag
 	cfg.RateLimit = *rateLimit
 	cfg.CryptoKey = *cryptoKeyFlag
+
+	// Collect explicitly set flags to enforce priority: flags > JSON.
+	setFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	// Config file path: -c/-config flag takes priority over CONFIG env.
+	if configPath == "" {
+		configPath = os.Getenv("CONFIG")
+	}
+
+	if configPath != "" {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading config file %s: %w", configPath, err)
+		}
+		var jc agentJSONConfig
+		if err := json.Unmarshal(data, &jc); err != nil {
+			return nil, fmt.Errorf("parsing config file %s: %w", configPath, err)
+		}
+		if jc.Address != "" && !setFlags["a"] {
+			cfg.ServerAddress = jc.Address
+		}
+		if jc.ReportInterval != "" && !setFlags["r"] {
+			d, err := time.ParseDuration(jc.ReportInterval)
+			if err != nil {
+				return nil, fmt.Errorf("invalid report_interval in config file: %w", err)
+			}
+			cfg.ReportInterval = d
+		}
+		if jc.PollInterval != "" && !setFlags["p"] {
+			d, err := time.ParseDuration(jc.PollInterval)
+			if err != nil {
+				return nil, fmt.Errorf("invalid poll_interval in config file: %w", err)
+			}
+			cfg.PollInterval = d
+		}
+		if jc.CryptoKey != "" && !setFlags["crypto-key"] {
+			cfg.CryptoKey = jc.CryptoKey
+		}
+	}
 
 	if addr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddress = addr
