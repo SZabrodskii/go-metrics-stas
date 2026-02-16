@@ -10,14 +10,16 @@ import (
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/internal/service"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func setupBenchmarkHandler() (*MetricsHandler, *chi.Mux) {
+func setupBenchmarkHandler() (*MetricsHandler, repository.Storage, *chi.Mux) {
 	storage := repository.NewMemStorage()
 	logger, _ := zap.NewDevelopment()
-	handler := NewMetricsHandler(storage, logger, nil)
+	svc := service.NewMetricsService(storage, logger)
+	handler := NewMetricsHandler(svc, logger, nil)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", handler.UpdateMetric)
@@ -27,11 +29,11 @@ func setupBenchmarkHandler() (*MetricsHandler, *chi.Mux) {
 	r.Post("/value", handler.GetMetricValueJSON)
 	r.Get("/", handler.ListAllMetricsHTML)
 
-	return handler, r
+	return handler, storage, r
 }
 
 func BenchmarkUpdateMetric(b *testing.B) {
-	_, r := setupBenchmarkHandler()
+	_, _, r := setupBenchmarkHandler()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -42,7 +44,7 @@ func BenchmarkUpdateMetric(b *testing.B) {
 }
 
 func BenchmarkUpdateMetricJSON(b *testing.B) {
-	_, r := setupBenchmarkHandler()
+	_, _, r := setupBenchmarkHandler()
 
 	value := 123.45
 	payload := struct {
@@ -66,7 +68,7 @@ func BenchmarkUpdateMetricJSON(b *testing.B) {
 }
 
 func BenchmarkUpdateBatchJSON_Small(b *testing.B) {
-	_, r := setupBenchmarkHandler()
+	_, _, r := setupBenchmarkHandler()
 
 	batch := make([]model.Metrics, 10)
 	for i := 0; i < 10; i++ {
@@ -89,7 +91,7 @@ func BenchmarkUpdateBatchJSON_Small(b *testing.B) {
 }
 
 func BenchmarkUpdateBatchJSON_Medium(b *testing.B) {
-	_, r := setupBenchmarkHandler()
+	_, _, r := setupBenchmarkHandler()
 
 	batch := make([]model.Metrics, 100)
 	for i := 0; i < 100; i++ {
@@ -112,7 +114,7 @@ func BenchmarkUpdateBatchJSON_Medium(b *testing.B) {
 }
 
 func BenchmarkUpdateBatchJSON_Large(b *testing.B) {
-	_, r := setupBenchmarkHandler()
+	_, _, r := setupBenchmarkHandler()
 
 	batch := make([]model.Metrics, 500)
 	for i := 0; i < 500; i++ {
@@ -144,8 +146,8 @@ func BenchmarkUpdateBatchJSON_Large(b *testing.B) {
 }
 
 func BenchmarkGetMetricValue(b *testing.B) {
-	handler, r := setupBenchmarkHandler()
-	handler.repo.UpdateGauge("testGauge", 123.45)
+	_, storage, r := setupBenchmarkHandler()
+	storage.UpdateGauge("testGauge", 123.45)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -156,8 +158,8 @@ func BenchmarkGetMetricValue(b *testing.B) {
 }
 
 func BenchmarkGetMetricValueJSON(b *testing.B) {
-	handler, r := setupBenchmarkHandler()
-	handler.repo.UpdateGauge("testGauge", 123.45)
+	_, storage, r := setupBenchmarkHandler()
+	storage.UpdateGauge("testGauge", 123.45)
 
 	payload := struct {
 		ID    string `json:"id"`
@@ -178,11 +180,11 @@ func BenchmarkGetMetricValueJSON(b *testing.B) {
 }
 
 func BenchmarkListAllMetricsHTML_Small(b *testing.B) {
-	handler, r := setupBenchmarkHandler()
+	_, storage, r := setupBenchmarkHandler()
 
 	for i := 0; i < 5; i++ {
-		handler.repo.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
-		handler.repo.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
+		storage.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
+		storage.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
 	}
 
 	b.ResetTimer()
@@ -194,11 +196,11 @@ func BenchmarkListAllMetricsHTML_Small(b *testing.B) {
 }
 
 func BenchmarkListAllMetricsHTML_Medium(b *testing.B) {
-	handler, r := setupBenchmarkHandler()
+	_, storage, r := setupBenchmarkHandler()
 
 	for i := 0; i < 50; i++ {
-		handler.repo.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
-		handler.repo.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
+		storage.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
+		storage.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
 	}
 
 	b.ResetTimer()
@@ -210,11 +212,11 @@ func BenchmarkListAllMetricsHTML_Medium(b *testing.B) {
 }
 
 func BenchmarkListAllMetricsHTML_Large(b *testing.B) {
-	handler, r := setupBenchmarkHandler()
+	_, storage, r := setupBenchmarkHandler()
 
 	for i := 0; i < 250; i++ {
-		handler.repo.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
-		handler.repo.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
+		storage.UpdateGauge(fmt.Sprintf("gauge_%d", i), float64(i))
+		storage.UpdateCounter(fmt.Sprintf("counter_%d", i), int64(i))
 	}
 
 	b.ResetTimer()
