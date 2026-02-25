@@ -27,8 +27,13 @@ func NewRouter(cfg *config.ServerConfig, metricsHandler *handler.MetricsHandler,
 		return nil, err
 	}
 
+	subnetCheck, err := mw.CheckTrustedSubnet(cfg.TrustedSubnet)
+	if err != nil {
+		return nil, err
+	}
+
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, mw.Decrypt(privateKey), mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
+	r.Use(middleware.RequestID, middleware.RealIP, middleware.StripSlashes, subnetCheck, mw.Decrypt(privateKey), mw.Decompress, mw.VerifyHash(cfg.Key), mw.ZapRequestLogger(logger), middleware.Recoverer, middleware.RedirectSlashes)
 
 	r.HandleFunc("/debug/pprof/", pprof.Index)
 	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)

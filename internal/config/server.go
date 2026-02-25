@@ -20,6 +20,7 @@ type serverJSONConfig struct {
 	StoreFile     string `json:"store_file"`
 	DatabaseDSN   string `json:"database_dsn"`
 	CryptoKey     string `json:"crypto_key"`
+	TrustedSubnet string `json:"trusted_subnet"`
 }
 
 // ServerConfig содержит конфигурацию HTTP сервера метрик.
@@ -41,7 +42,8 @@ type ServerConfig struct {
 	// AuditFile — путь к файлу аудит-лога (опционально).
 	AuditFile string
 	// AuditURL — URL для удалённого аудит-лога (опционально).
-	AuditURL string
+	AuditURL      string
+	TrustedSubnet string
 }
 
 // NewServerConfig создаёт ServerConfig из флагов командной строки и переменных окружения.
@@ -60,6 +62,7 @@ func NewServerConfig() (*ServerConfig, error) {
 	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "Path to RSA private key PEM file for decryption (optional)")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to audit log file (optional)")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "URL for remote audit logging (optional)")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "", "Trusted subnet in CIDR notation (optional)")
 
 	var configPath string
 
@@ -114,6 +117,9 @@ func NewServerConfig() (*ServerConfig, error) {
 		if jc.CryptoKey != "" && !setFlags["crypto-key"] {
 			cfg.CryptoKey = jc.CryptoKey
 		}
+		if jc.TrustedSubnet != "" && !setFlags["t"] {
+			cfg.TrustedSubnet = jc.TrustedSubnet
+		}
 	}
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
@@ -159,6 +165,9 @@ func NewServerConfig() (*ServerConfig, error) {
 	}
 	if v, ok := os.LookupEnv("CRYPTO_KEY"); ok {
 		cfg.CryptoKey = v
+	}
+	if v, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = v
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 
