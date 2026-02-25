@@ -10,6 +10,7 @@ import (
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/internal/service"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -17,7 +18,8 @@ import (
 func setupTestServer() *httptest.Server {
 	storage := repository.NewMemStorage()
 	logger := zap.NewNop()
-	h := handler.NewMetricsHandler(storage, logger, nil)
+	svc := service.NewMetricsService(storage, logger)
+	h := handler.NewMetricsHandler(svc, logger, nil)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)

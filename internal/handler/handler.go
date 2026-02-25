@@ -3,6 +3,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
 	"net/http"
 	"sort"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/audit"
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
-	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/internal/service"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -19,18 +20,35 @@ import (
 // MetricsHandler обрабатывает HTTP запросы для работы с метриками.
 // Предоставляет эндпоинты для обновления и получения метрик.
 type MetricsHandler struct {
-	repo      repository.Storage
+	svc       service.MetricsService
 	logger    *zap.Logger
 	publisher *audit.Publisher
 }
 
 // NewMetricsHandler создаёт новый экземпляр MetricsHandler.
-// Принимает хранилище, логгер и опциональный publisher для аудита.
-func NewMetricsHandler(repo repository.Storage, logger *zap.Logger, publisher *audit.Publisher) *MetricsHandler {
+// Принимает сервис метрик, логгер и опциональный publisher для аудита.
+func NewMetricsHandler(svc service.MetricsService, logger *zap.Logger, publisher *audit.Publisher) *MetricsHandler {
 	return &MetricsHandler{
-		repo:      repo,
+		svc:       svc,
 		logger:    logger,
 		publisher: publisher,
+	}
+}
+
+func (h *MetricsHandler) handleServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrInvalidMetricType):
+		http.Error(w, "invalid metric type", http.StatusBadRequest)
+	case errors.Is(err, service.ErrMetricNotFound):
+		http.Error(w, "metric not found", http.StatusNotFound)
+	case errors.Is(err, service.ErrInvalidMetricID):
+		http.Error(w, "id and type are required", http.StatusBadRequest)
+	case errors.Is(err, service.ErrMissingValue):
+		http.Error(w, "value is required for gauge", http.StatusBadRequest)
+	case errors.Is(err, service.ErrMissingDelta):
+		http.Error(w, "delta is required for counter", http.StatusBadRequest)
+	default:
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }
 
@@ -52,14 +70,20 @@ func (h *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad request: gauge must be float64", http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateGauge(metricName, value)
+		if err := h.svc.UpdateGauge(metricName, value); err != nil {
+			h.handleServiceError(w, err)
+			return
+		}
 	case "counter":
 		delta, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
 			http.Error(w, "bad request: counter must be int64", http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateCounter(metricName, delta)
+		if _, err := h.svc.UpdateCounter(metricName, delta); err != nil {
+			h.handleServiceError(w, err)
+			return
+		}
 	default:
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
 		return
@@ -89,18 +113,26 @@ func (h *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 
 	switch tp {
 	case "gauge":
-		value, err := h.repo.GetGauge(name)
+		value, err := h.svc.GetGauge(name)
 		if err != nil {
-			http.Error(w, "gauge not found", http.StatusNotFound)
+			if errors.Is(err, service.ErrMetricNotFound) {
+				http.Error(w, "gauge not found", http.StatusNotFound)
+				return
+			}
+			h.handleServiceError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(strconv.FormatFloat(value, 'g', -1, 64)))
 
 	case "counter":
-		value, err := h.repo.GetCounter(name)
+		value, err := h.svc.GetCounter(name)
 		if err != nil {
-			http.Error(w, "counter not found", http.StatusNotFound)
+			if errors.Is(err, service.ErrMetricNotFound) {
+				http.Error(w, "counter not found", http.StatusNotFound)
+				return
+			}
+			h.handleServiceError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -114,7 +146,7 @@ func (h *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 // Возвращает HTML страницу со списком всех метрик.
 func (h *MetricsHandler) ListAllMetricsHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	allMetrics, err := h.repo.GetAllMetrics()
+	allMetrics, err := h.svc.GetAllMetrics()
 	if err != nil {
 		http.Error(w, "failed to retrieve metrics", http.StatusInternalServerError)
 		return
@@ -185,7 +217,10 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			http.Error(w, "value is required for gauge", http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateGauge(m.ID, *m.Value)
+		if err := h.svc.UpdateGauge(m.ID, *m.Value); err != nil {
+			h.handleServiceError(w, err)
+			return
+		}
 
 		resp := struct {
 			ID    string   `json:"id"`
@@ -210,11 +245,9 @@ func (h *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 			http.Error(w, "delta is required for counter", http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateCounter(m.ID, *m.Delta)
-
-		newVal, err := h.repo.GetCounter(m.ID)
+		newVal, err := h.svc.UpdateCounter(m.ID, *m.Delta)
 		if err != nil {
-			http.Error(w, "failed to retrieve updated counter", http.StatusInternalServerError)
+			h.handleServiceError(w, err)
 			return
 		}
 
@@ -262,9 +295,13 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 
 	switch q.MType {
 	case "gauge":
-		val, err := h.repo.GetGauge(q.ID)
+		val, err := h.svc.GetGauge(q.ID)
 		if err != nil {
-			http.Error(w, "gauge not found", http.StatusNotFound)
+			if errors.Is(err, service.ErrMetricNotFound) {
+				http.Error(w, "gauge not found", http.StatusNotFound)
+				return
+			}
+			h.handleServiceError(w, err)
 			return
 		}
 		resp := struct {
@@ -280,9 +317,13 @@ func (h *MetricsHandler) GetMetricValueJSON(w http.ResponseWriter, r *http.Reque
 		_ = json.NewEncoder(w).Encode(resp)
 
 	case "counter":
-		val, err := h.repo.GetCounter(q.ID)
+		val, err := h.svc.GetCounter(q.ID)
 		if err != nil {
-			http.Error(w, "counter not found", http.StatusNotFound)
+			if errors.Is(err, service.ErrMetricNotFound) {
+				http.Error(w, "counter not found", http.StatusNotFound)
+				return
+			}
+			h.handleServiceError(w, err)
 			return
 		}
 		resp := struct {
@@ -323,29 +364,9 @@ func (h *MetricsHandler) UpdateBatchJSON(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	for _, m := range batch {
-		if m.ID == "" || m.MType == "" {
-			http.Error(w, "id and type are required", http.StatusBadRequest)
-			return
-		}
-		switch m.MType {
-		case "gauge":
-			if m.Value == nil {
-				http.Error(w, "value is required for gauge", http.StatusBadRequest)
-				return
-			}
-			h.repo.UpdateGauge(m.ID, *m.Value)
-		case "counter":
-			if m.Delta == nil {
-				http.Error(w, "delta is required for counter", http.StatusBadRequest)
-				return
-			}
-			h.repo.UpdateCounter(m.ID, *m.Delta)
-		default:
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
-			return
-		}
-
+	if err := h.svc.UpdateBatch(batch); err != nil {
+		h.handleServiceError(w, err)
+		return
 	}
 
 	if h.publisher != nil {

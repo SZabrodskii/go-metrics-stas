@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,8 @@ import (
 func TestUpdateMetric(t *testing.T) {
 	storage := repository.NewMemStorage()
 	logger, _ := zap.NewDevelopment()
-	handler := NewMetricsHandler(storage, logger, nil)
+	svc := service.NewMetricsService(storage, logger)
+	handler := NewMetricsHandler(svc, logger, nil)
 
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", handler.UpdateMetric)
@@ -103,7 +105,8 @@ func TestUpdateMetric(t *testing.T) {
 func TestGetMetricValue(t *testing.T) {
 	storage := repository.NewMemStorage()
 	logger, _ := zap.NewDevelopment()
-	handler := NewMetricsHandler(storage, logger, nil)
+	svc := service.NewMetricsService(storage, logger)
+	handler := NewMetricsHandler(svc, logger, nil)
 
 	storage.UpdateGauge("testGauge", 123.45)
 	storage.UpdateCounter("testCounter", 42)
@@ -159,7 +162,8 @@ func TestGetMetricValue(t *testing.T) {
 func TestListAllMetricsHTML(t *testing.T) {
 	storage := repository.NewMemStorage()
 	logger, _ := zap.NewDevelopment()
-	handler := NewMetricsHandler(storage, logger, nil)
+	svc := service.NewMetricsService(storage, logger)
+	handler := NewMetricsHandler(svc, logger, nil)
 
 	storage.UpdateGauge("testGauge", 123.45)
 	storage.UpdateCounter("testCounter", 42)

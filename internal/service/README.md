@@ -8,3 +8,16 @@
 - Сервисы должны быть независимы от деталей транспорта (HTTP, gRPC и т.д.).
 - Взаимодействие с базой данных происходит через интерфейсы репозиториев.
 - Каждый сервис должен иметь четко определенную область ответственности.
+
+## MetricsService
+
+`MetricsService` — сервис для работы с метриками (gauge и counter). Выполняет валидацию бизнес-правил и делегирует операции хранения в `repository.Storage`.
+
+Методы:
+- `UpdateGauge(id, value)` — обновление gauge-метрики
+- `UpdateCounter(id, delta)` — инкремент counter-метрики, возвращает накопленное значение
+- `GetGauge(id)` / `GetCounter(id)` — получение значения метрики
+- `GetAllMetrics()` — получение всех метрик
+- `UpdateBatch(metrics)` — пакетное обновление метрик с валидацией
+
+Доменные ошибки определены в `errors.go` (`ErrInvalidMetricType`, `ErrMetricNotFound`, `ErrInvalidMetricID`, `ErrMissingValue`, `ErrMissingDelta`).

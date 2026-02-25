@@ -10,14 +10,17 @@ import (
 
 	"github.com/SZabrodskii/go-metrics-stas/internal/model"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
+	"github.com/SZabrodskii/go-metrics-stas/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
-func newTestHandler() *MetricsHandler {
-	return NewMetricsHandler(repository.NewMemStorage(), zap.NewNop(), nil)
+func newTestHandler() (*MetricsHandler, repository.Storage) {
+	storage := repository.NewMemStorage()
+	svc := service.NewMetricsService(storage, zap.NewNop())
+	return NewMetricsHandler(svc, zap.NewNop(), nil), storage
 }
 
 func setupRouter(h *MetricsHandler) *chi.Mux {
@@ -32,7 +35,7 @@ func setupRouter(h *MetricsHandler) *chi.Mux {
 }
 
 func TestUpdateMetricJSON_Gauge(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	val := 42.5
 	body, _ := json.Marshal(map[string]interface{}{"id": "cpu", "type": "gauge", "value": val})
 
@@ -50,7 +53,7 @@ func TestUpdateMetricJSON_Gauge(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_Counter(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"id": "hits", "type": "counter", "delta": 5})
 
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
@@ -67,7 +70,7 @@ func TestUpdateMetricJSON_Counter(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_InvalidJSON(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	req := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader("not json"))
 	w := httptest.NewRecorder()
 	h.UpdateMetricJSON(w, req)
@@ -75,7 +78,7 @@ func TestUpdateMetricJSON_InvalidJSON(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_MissingID(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"type": "gauge", "value": 1.0})
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -84,7 +87,7 @@ func TestUpdateMetricJSON_MissingID(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_MissingType(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"id": "test", "value": 1.0})
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -93,7 +96,7 @@ func TestUpdateMetricJSON_MissingType(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_InvalidType(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"id": "test", "type": "unknown", "value": 1.0})
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -102,7 +105,7 @@ func TestUpdateMetricJSON_InvalidType(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_GaugeNoValue(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"id": "test", "type": "gauge"})
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -111,7 +114,7 @@ func TestUpdateMetricJSON_GaugeNoValue(t *testing.T) {
 }
 
 func TestUpdateMetricJSON_CounterNoDelta(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]interface{}{"id": "test", "type": "counter"})
 	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -120,8 +123,8 @@ func TestUpdateMetricJSON_CounterNoDelta(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_Gauge(t *testing.T) {
-	h := newTestHandler()
-	h.repo.UpdateGauge("cpu", 75.5)
+	h, storage := newTestHandler()
+	storage.UpdateGauge("cpu", 75.5)
 
 	body, _ := json.Marshal(map[string]string{"id": "cpu", "type": "gauge"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
@@ -135,8 +138,8 @@ func TestGetMetricValueJSON_Gauge(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_Counter(t *testing.T) {
-	h := newTestHandler()
-	h.repo.UpdateCounter("hits", 100)
+	h, storage := newTestHandler()
+	storage.UpdateCounter("hits", 100)
 
 	body, _ := json.Marshal(map[string]string{"id": "hits", "type": "counter"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
@@ -150,7 +153,7 @@ func TestGetMetricValueJSON_Counter(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_NotFound(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]string{"id": "unknown", "type": "gauge"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -159,7 +162,7 @@ func TestGetMetricValueJSON_NotFound(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_CounterNotFound(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]string{"id": "unknown", "type": "counter"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -168,7 +171,7 @@ func TestGetMetricValueJSON_CounterNotFound(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_InvalidJSON(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	req := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader("bad"))
 	w := httptest.NewRecorder()
 	h.GetMetricValueJSON(w, req)
@@ -176,7 +179,7 @@ func TestGetMetricValueJSON_InvalidJSON(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_MissingFields(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]string{"id": "test"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -185,7 +188,7 @@ func TestGetMetricValueJSON_MissingFields(t *testing.T) {
 }
 
 func TestGetMetricValueJSON_InvalidType(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal(map[string]string{"id": "test", "type": "bad"})
 	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -194,7 +197,7 @@ func TestGetMetricValueJSON_InvalidType(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_Valid(t *testing.T) {
-	h := newTestHandler()
+	h, storage := newTestHandler()
 	val := 1.0
 	delta := int64(5)
 	batch := []model.Metrics{
@@ -210,17 +213,17 @@ func TestUpdateBatchJSON_Valid(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	g, err := h.repo.GetGauge("g1")
+	g, err := storage.GetGauge("g1")
 	require.NoError(t, err)
 	assert.InDelta(t, 1.0, g, 0.001)
 
-	c, err := h.repo.GetCounter("c1")
+	c, err := storage.GetCounter("c1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), c)
 }
 
 func TestUpdateBatchJSON_EmptyBatch(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	body, _ := json.Marshal([]model.Metrics{})
 	req := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -230,7 +233,7 @@ func TestUpdateBatchJSON_EmptyBatch(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_InvalidJSON(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	req := httptest.NewRequest(http.MethodPost, "/updates", strings.NewReader("bad"))
 	w := httptest.NewRecorder()
 	h.UpdateBatchJSON(w, req)
@@ -238,7 +241,7 @@ func TestUpdateBatchJSON_InvalidJSON(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_MissingID(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	val := 1.0
 	batch := []model.Metrics{{MType: "gauge", Value: &val}}
 	body, _ := json.Marshal(batch)
@@ -249,7 +252,7 @@ func TestUpdateBatchJSON_MissingID(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_InvalidType(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	val := 1.0
 	batch := []model.Metrics{{ID: "x", MType: "bad", Value: &val}}
 	body, _ := json.Marshal(batch)
@@ -260,7 +263,7 @@ func TestUpdateBatchJSON_InvalidType(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_GaugeNoValue(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	batch := []model.Metrics{{ID: "x", MType: "gauge"}}
 	body, _ := json.Marshal(batch)
 	req := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
@@ -270,7 +273,7 @@ func TestUpdateBatchJSON_GaugeNoValue(t *testing.T) {
 }
 
 func TestUpdateBatchJSON_CounterNoDelta(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	batch := []model.Metrics{{ID: "x", MType: "counter"}}
 	body, _ := json.Marshal(batch)
 	req := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
@@ -280,7 +283,7 @@ func TestUpdateBatchJSON_CounterNoDelta(t *testing.T) {
 }
 
 func TestListAllMetricsHTML_Empty(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 	h.ListAllMetricsHTML(w, req)
@@ -290,7 +293,7 @@ func TestListAllMetricsHTML_Empty(t *testing.T) {
 }
 
 func TestGetMetricValue_CounterNotFound(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 
 	r := setupRouter(h)
 	req := httptest.NewRequest(http.MethodGet, "/value/counter/missing", nil)
@@ -300,7 +303,7 @@ func TestGetMetricValue_CounterNotFound(t *testing.T) {
 }
 
 func TestGetMetricValue_InvalidGaugeValue(t *testing.T) {
-	h := newTestHandler()
+	h, _ := newTestHandler()
 	r := setupRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/update/gauge/test/notfloat", nil)

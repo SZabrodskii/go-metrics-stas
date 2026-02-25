@@ -95,6 +95,17 @@ type metricsClient struct {
 	client    httpDoer
 	key       string
 	publicKey *rsa.PublicKey
+	localIP   string
+}
+
+func resolveLocalIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	addr := conn.LocalAddr().(*net.UDPAddr)
+	return addr.IP.String()
 }
 
 func newMetricsClient(serverURL string, key string, publicKey *rsa.PublicKey) *metricsClient {
@@ -106,6 +117,7 @@ func newMetricsClient(serverURL string, key string, publicKey *rsa.PublicKey) *m
 		},
 		key:       key,
 		publicKey: publicKey,
+		localIP:   resolveLocalIP(),
 	}
 }
 
@@ -165,6 +177,9 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	if mc.localIP != "" {
+		req.Header.Set("X-Real-IP", mc.localIP)
+	}
 	if mc.key != "" {
 		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
 	}
@@ -234,6 +249,9 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+	if mc.localIP != "" {
+		req.Header.Set("X-Real-IP", mc.localIP)
+	}
 	if mc.key != "" {
 		req.Header.Set("HashSHA256", hmacSHA256Hex(jb.Bytes(), mc.key))
 	}
