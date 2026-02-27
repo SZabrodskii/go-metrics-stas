@@ -4,6 +4,7 @@ import (
 	"github.com/SZabrodskii/go-metrics-stas/internal/audit"
 	"github.com/SZabrodskii/go-metrics-stas/internal/config"
 	"github.com/SZabrodskii/go-metrics-stas/internal/config/db"
+	"github.com/SZabrodskii/go-metrics-stas/internal/grpcserver"
 	"github.com/SZabrodskii/go-metrics-stas/internal/handler"
 	"github.com/SZabrodskii/go-metrics-stas/internal/repository"
 	"github.com/SZabrodskii/go-metrics-stas/internal/server"
@@ -27,9 +28,11 @@ func main() {
 			handler.NewMetricsHandler,
 			handler.NewPingHandler,
 			server.NewRouter,
+			grpcserver.NewGRPCServer,
 		),
 		fx.Invoke(
 			server.NewServer,
+			grpcserver.RunGRPCServer,
 			handler.RegisterSignalHandler,
 		),
 	).Run()

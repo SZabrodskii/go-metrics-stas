@@ -21,6 +21,7 @@ type serverJSONConfig struct {
 	DatabaseDSN   string `json:"database_dsn"`
 	CryptoKey     string `json:"crypto_key"`
 	TrustedSubnet string `json:"trusted_subnet"`
+	GRPCAddress   string `json:"grpc_address"`
 }
 
 // ServerConfig содержит конфигурацию HTTP сервера метрик.
@@ -44,6 +45,7 @@ type ServerConfig struct {
 	// AuditURL — URL для удалённого аудит-лога (опционально).
 	AuditURL      string
 	TrustedSubnet string
+	GRPCAddress   string
 }
 
 // NewServerConfig создаёт ServerConfig из флагов командной строки и переменных окружения.
@@ -63,6 +65,7 @@ func NewServerConfig() (*ServerConfig, error) {
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Path to audit log file (optional)")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "URL for remote audit logging (optional)")
 	flag.StringVar(&cfg.TrustedSubnet, "t", "", "Trusted subnet in CIDR notation (optional)")
+	flag.StringVar(&cfg.GRPCAddress, "grpc", "", "gRPC listen address (host:port, optional)")
 
 	var configPath string
 
@@ -120,6 +123,9 @@ func NewServerConfig() (*ServerConfig, error) {
 		if jc.TrustedSubnet != "" && !setFlags["t"] {
 			cfg.TrustedSubnet = jc.TrustedSubnet
 		}
+		if jc.GRPCAddress != "" && !setFlags["grpc"] {
+			cfg.GRPCAddress = jc.GRPCAddress
+		}
 	}
 
 	if v, ok := os.LookupEnv("ADDRESS"); ok {
@@ -168,6 +174,9 @@ func NewServerConfig() (*ServerConfig, error) {
 	}
 	if v, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
 		cfg.TrustedSubnet = v
+	}
+	if v, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddress = v
 	}
 	cfg.StoreInterval = time.Duration(*storeIntervalSec) * time.Second
 
