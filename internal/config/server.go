@@ -45,8 +45,7 @@ type ServerConfig struct {
 	// AuditURL — URL для удалённого аудит-лога (опционально).
 	AuditURL      string
 	TrustedSubnet string
-	// GRPCAddress — адрес для прослушивания gRPC (host:port, опционально).
-	GRPCAddress string
+	GRPCAddress   string
 }
 
 // NewServerConfig создаёт ServerConfig из флагов командной строки и переменных окружения.

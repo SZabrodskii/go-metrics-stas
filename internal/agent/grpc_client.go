@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// grpcMetricsClient отправляет метрики на сервер по gRPC.
 type grpcMetricsClient struct {
 	conn    *grpc.ClientConn
 	client  pb.MetricsClient
@@ -32,7 +31,6 @@ func newGRPCMetricsClient(address string, localIP string) (*grpcMetricsClient, e
 	}, nil
 }
 
-// SendBatch отправляет батч метрик через gRPC.
 func (c *grpcMetricsClient) SendBatch(metrics []model.Metrics) error {
 	pbMetrics := make([]*pb.Metric, 0, len(metrics))
 	for _, m := range metrics {
@@ -63,7 +61,6 @@ func (c *grpcMetricsClient) SendBatch(metrics []model.Metrics) error {
 	return err
 }
 
-// Close закрывает gRPC соединение.
 func (c *grpcMetricsClient) Close() error {
 	return c.conn.Close()
 }

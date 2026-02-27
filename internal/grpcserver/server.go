@@ -11,19 +11,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MetricsGRPCServer реализует gRPC сервис Metrics.
 type MetricsGRPCServer struct {
 	pb.UnimplementedMetricsServer
 	svc    service.MetricsService
 	logger *zap.Logger
 }
 
-// NewMetricsGRPCServer создаёт новый gRPC обработчик метрик.
 func NewMetricsGRPCServer(svc service.MetricsService, logger *zap.Logger) *MetricsGRPCServer {
 	return &MetricsGRPCServer{svc: svc, logger: logger}
 }
 
-// UpdateMetrics принимает батч метрик и сохраняет их через MetricsService.
 func (s *MetricsGRPCServer) UpdateMetrics(ctx context.Context, req *pb.UpdateMetricsRequest) (*pb.UpdateMetricsResponse, error) {
 	batch := make([]model.Metrics, 0, len(req.GetMetrics()))
 	for _, m := range req.GetMetrics() {

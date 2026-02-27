@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// NewGRPCServer создаёт gRPC сервер с интерцептором проверки доверенной подсети.
 func NewGRPCServer(cfg *config.ServerConfig, svc service.MetricsService, logger *zap.Logger) (*grpc.Server, error) {
 	interceptor, err := TrustedSubnetInterceptor(cfg.TrustedSubnet)
 	if err != nil {
@@ -24,8 +23,6 @@ func NewGRPCServer(cfg *config.ServerConfig, svc service.MetricsService, logger 
 	return srv, nil
 }
 
-// RunGRPCServer запускает gRPC сервер в рамках fx lifecycle.
-// Если GRPCAddress не задан — ничего не делает.
 func RunGRPCServer(lc fx.Lifecycle, srv *grpc.Server, cfg *config.ServerConfig, logger *zap.Logger) {
 	if cfg.GRPCAddress == "" {
 		logger.Info("gRPC address not configured, skipping gRPC server")

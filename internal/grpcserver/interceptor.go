@@ -11,9 +11,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TrustedSubnetInterceptor возвращает gRPC UnaryServerInterceptor,
-// проверяющий принадлежность IP-адреса из метаданных x-real-ip доверенной подсети.
-// Если cidr пуст, возвращает no-op интерцептор.
 func TrustedSubnetInterceptor(cidr string) (grpc.UnaryServerInterceptor, error) {
 	if cidr == "" {
 		return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

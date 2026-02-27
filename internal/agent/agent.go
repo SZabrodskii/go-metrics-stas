@@ -18,7 +18,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// BatchSender абстрагирует отправку батча метрик (HTTP или gRPC).
 type BatchSender interface {
 	SendBatch(metrics []model.Metrics) error
 }
@@ -28,7 +27,7 @@ type BatchSender interface {
 type Agent struct {
 	collector      *metricsCollector
 	sender         BatchSender
-	grpcClient     *grpcMetricsClient // nil если используется HTTP
+	grpcClient     *grpcMetricsClient
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	currentMetrics map[string]model.Metrics
@@ -40,10 +39,6 @@ type Agent struct {
 	workersWG sync.WaitGroup
 }
 
-// NewAgent создаёт новый экземпляр Agent.
-// serverURL — адрес сервера метрик, pollInterval — интервал сбора,
-// reportInterval — интервал отправки, key — ключ для HMAC подписи,
-// rateLimit — количество параллельных воркеров (0 — синхронная отправка).
 func NewAgent(sender BatchSender, grpcClient *grpcMetricsClient, pollInterval time.Duration, reportInterval time.Duration, rateLimit int, logger *zap.Logger) *Agent {
 	if rateLimit < 0 {
 		rateLimit = 0
