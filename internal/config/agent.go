@@ -18,6 +18,7 @@ type agentJSONConfig struct {
 	ReportInterval string `json:"report_interval"`
 	PollInterval   string `json:"poll_interval"`
 	CryptoKey      string `json:"crypto_key"`
+	GRPCAddress    string `json:"grpc_address"`
 }
 
 // AgentConfig содержит конфигурацию агента сбора метрик.
@@ -34,6 +35,8 @@ type AgentConfig struct {
 	RateLimit int
 	// CryptoKey — путь к файлу публичного RSA-ключа для шифрования (опционально).
 	CryptoKey string
+	// GRPCAddress — адрес gRPC сервера (host:port, опционально).
+	GRPCAddress string
 }
 
 // NewAgentConfig создаёт AgentConfig из флагов командной строки и переменных окружения.
@@ -48,6 +51,7 @@ func NewAgentConfig() (*AgentConfig, error) {
 	keyFlag := flag.String("k", "", "Signing key for HMAC-SHA256 (optional)")
 	rateLimit := flag.Int("l", 0, "Maximum number of concurrent outgoing requests (0 = unlimited)")
 	cryptoKeyFlag := flag.String("crypto-key", "", "Path to RSA public key PEM file for encryption (optional)")
+	grpcAddrFlag := flag.String("grpc", "", "gRPC server address (host:port, optional)")
 
 	var configPath string
 	flag.StringVar(&configPath, "c", "", "Path to JSON config file")
@@ -63,6 +67,7 @@ func NewAgentConfig() (*AgentConfig, error) {
 	cfg.Key = *keyFlag
 	cfg.RateLimit = *rateLimit
 	cfg.CryptoKey = *cryptoKeyFlag
+	cfg.GRPCAddress = *grpcAddrFlag
 
 	// Collect explicitly set flags to enforce priority: flags > JSON.
 	setFlags := make(map[string]bool)
@@ -104,6 +109,9 @@ func NewAgentConfig() (*AgentConfig, error) {
 		if jc.CryptoKey != "" && !setFlags["crypto-key"] {
 			cfg.CryptoKey = jc.CryptoKey
 		}
+		if jc.GRPCAddress != "" && !setFlags["grpc"] {
+			cfg.GRPCAddress = jc.GRPCAddress
+		}
 	}
 
 	if addr, ok := os.LookupEnv("ADDRESS"); ok {
@@ -130,6 +138,9 @@ func NewAgentConfig() (*AgentConfig, error) {
 
 	if v, ok := os.LookupEnv("CRYPTO_KEY"); ok {
 		cfg.CryptoKey = v
+	}
+	if v, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddress = v
 	}
 
 	if v, ok := os.LookupEnv("RATE_LIMIT"); ok {
