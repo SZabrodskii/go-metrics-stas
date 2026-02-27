@@ -34,8 +34,7 @@ type AgentConfig struct {
 	// RateLimit — количество параллельных запросов (0 = без ограничений).
 	RateLimit int
 	// CryptoKey — путь к файлу публичного RSA-ключа для шифрования (опционально).
-	CryptoKey string
-	// GRPCAddress — адрес gRPC сервера (host:port, опционально).
+	CryptoKey   string
 	GRPCAddress string
 }
 
