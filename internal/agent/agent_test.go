@@ -11,27 +11,31 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func TestNewAgent(t *testing.T) {
+func newTestAgent(t *testing.T, rateLimit int) *Agent {
+	t.Helper()
 	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "key", 5, nil, logger)
+	sender := newMetricsClient("http://localhost:8080", "", nil)
+	return NewAgent(sender, nil, time.Second, time.Second, rateLimit, logger)
+}
+
+func TestNewAgent(t *testing.T) {
+	a := newTestAgent(t, 5)
 	require.NotNil(t, a)
 	assert.Equal(t, time.Second, a.pollInterval)
 	assert.Equal(t, time.Second, a.reportInterval)
 	assert.Equal(t, 5, a.rateLimit)
 	assert.NotNil(t, a.collector)
-	assert.NotNil(t, a.client)
+	assert.NotNil(t, a.sender)
 	assert.NotNil(t, a.currentMetrics)
 }
 
 func TestNewAgent_NegativeRateLimit(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", -5, nil, logger)
+	a := newTestAgent(t, -5)
 	assert.Equal(t, 0, a.rateLimit)
 }
 
 func TestAgent_Collect(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 
 	a.collect()
 	a.mx.RLock()
@@ -51,22 +55,19 @@ func TestAgent_Collect(t *testing.T) {
 }
 
 func TestAgent_SendBatch_Empty(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 	a.sendBatch(nil)
 	a.sendBatch([]model.Metrics{})
 }
 
 func TestAgent_DispatchMetrics_EmptyMap(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 	ctx := context.Background()
 	a.dispatchMetrics(ctx)
 }
 
 func TestAgent_DispatchMetrics_WithData(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 	val := 42.0
 	a.mx.Lock()
 	a.currentMetrics["test"] = model.Metrics{ID: "test", MType: model.Gauge, Value: &val}
@@ -77,21 +78,18 @@ func TestAgent_DispatchMetrics_WithData(t *testing.T) {
 }
 
 func TestAgent_Shutdown_NoMetrics(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 	a.Shutdown()
 }
 
 func TestAgent_Shutdown_WithMetrics(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 	a.collect()
 	a.Shutdown()
 }
 
 func TestAgent_Shutdown_WithWorkers(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 2, nil, logger)
+	a := newTestAgent(t, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 	a.startWorkers(ctx)
 	cancel()
@@ -99,8 +97,7 @@ func TestAgent_Shutdown_WithWorkers(t *testing.T) {
 }
 
 func TestAgent_Run_CancelledContext(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	a := NewAgent("http://localhost:8080", time.Second, time.Second, "", 0, nil, logger)
+	a := newTestAgent(t, 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
