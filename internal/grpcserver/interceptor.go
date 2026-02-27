@@ -2,7 +2,7 @@ package grpcserver
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net"
 
 	"google.golang.org/grpc"
@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+var ErrInvalidCIDR = errors.New("invalid trusted_subnet CIDR")
 
 func TrustedSubnetInterceptor(cidr string) (grpc.UnaryServerInterceptor, error) {
 	if cidr == "" {
@@ -20,7 +22,7 @@ func TrustedSubnetInterceptor(cidr string) (grpc.UnaryServerInterceptor, error) 
 
 	_, subnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid trusted_subnet CIDR: %w", err)
+		return nil, errors.Join(ErrInvalidCIDR, err)
 	}
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

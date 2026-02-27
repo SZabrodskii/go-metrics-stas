@@ -4,7 +4,7 @@ package agent
 import (
 	"context"
 	"crypto/rsa"
-	"fmt"
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -16,6 +16,11 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+)
+
+var (
+	ErrCreateGRPCClient = errors.New("create gRPC client")
+	ErrLoadPublicKey    = errors.New("load RSA public key")
 )
 
 type BatchSender interface {
@@ -301,7 +306,7 @@ var Module = fx.Options(
 				var err error
 				grpcCl, err = newGRPCMetricsClient(cfg.GRPCAddress, localIP)
 				if err != nil {
-					return nil, fmt.Errorf("create gRPC client: %w", err)
+					return nil, errors.Join(ErrCreateGRPCClient, err)
 				}
 				sender = grpcCl
 				logger.Info("Agent will send metrics via gRPC", zap.String("address", cfg.GRPCAddress))
@@ -328,7 +333,7 @@ func loadPublicKey(path string, logger *zap.Logger) (*rsa.PublicKey, error) {
 	key, err := appcrypto.LoadPublicKey(path)
 	if err != nil {
 		logger.Error("failed to load RSA public key", zap.String("path", path), zap.Error(err))
-		return nil, fmt.Errorf("load RSA public key %s: %w", path, err)
+		return nil, errors.Join(ErrLoadPublicKey, err)
 	}
 	logger.Info("RSA public key loaded for encryption", zap.String("path", path))
 	return key, nil
