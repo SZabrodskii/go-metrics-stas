@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	appcrypto "github.com/SZabrodskii/go-metrics-stas/internal/crypto"
@@ -20,7 +21,23 @@ import (
 	"github.com/SZabrodskii/go-metrics-stas/internal/pool"
 )
 
-var retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+var (
+	retrySchedule = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+
+	ErrEncodeJSON      = errors.New("encode metric json")
+	ErrCompressMetrics = errors.New("compress metrics")
+	ErrEncryptBody     = errors.New("encrypt body")
+	ErrBuildRequest    = errors.New("build request")
+	ErrBatchNotFound   = errors.New("batch endpoint was not found")
+)
+
+type StatusError struct {
+	Code int
+}
+
+func (e *StatusError) Error() string {
+	return "unexpected server status: " + strconv.Itoa(e.Code)
+}
 
 type httpDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -150,7 +167,7 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	defer pool.PutBuffer(jb)
 
 	if err := json.NewEncoder(jb).Encode(&payload); err != nil {
-		return fmt.Errorf("encode metric json: %w", err)
+		return errors.Join(ErrEncodeJSON, err)
 	}
 
 	gb := pool.GetBuffer()
@@ -159,7 +176,7 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	zw := pool.GetGzipWriter(gb)
 	if _, err := zw.Write(jb.Bytes()); err != nil {
 		pool.PutGzipWriter(zw)
-		return fmt.Errorf("could not compress metrics: %w", err)
+		return errors.Join(ErrCompressMetrics, err)
 	}
 	pool.PutGzipWriter(zw)
 
@@ -168,12 +185,12 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 
 	bodyBytes, err := appcrypto.Encrypt(bodyBytes, mc.publicKey)
 	if err != nil {
-		return fmt.Errorf("encrypt body: %w", err)
+		return errors.Join(ErrEncryptBody, err)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return errors.Join(ErrBuildRequest, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
@@ -194,7 +211,7 @@ func (mc *metricsClient) SendMetric(metric model.Metrics) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned status: %d", resp.StatusCode)
+		return &StatusError{Code: resp.StatusCode}
 	}
 
 	var ack model.Metrics
@@ -222,7 +239,7 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	defer pool.PutBuffer(jb)
 
 	if err := json.NewEncoder(jb).Encode(&metrics); err != nil {
-		return fmt.Errorf("could not encode metrics to json: %v", err)
+		return errors.Join(ErrEncodeJSON, err)
 	}
 
 	gb := pool.GetBuffer()
@@ -231,7 +248,7 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	zw := pool.GetGzipWriter(gb)
 	if _, err := zw.Write(jb.Bytes()); err != nil {
 		pool.PutGzipWriter(zw)
-		return fmt.Errorf("could not compress metrics: %v", err)
+		return errors.Join(ErrCompressMetrics, err)
 	}
 	pool.PutGzipWriter(zw)
 
@@ -240,12 +257,12 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 
 	gzBytes, err := appcrypto.Encrypt(gzBytes, mc.publicKey)
 	if err != nil {
-		return fmt.Errorf("encrypt body: %w", err)
+		return errors.Join(ErrEncryptBody, err)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(gzBytes))
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return errors.Join(ErrBuildRequest, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
@@ -266,11 +283,11 @@ func (mc *metricsClient) SendBatch(metrics []model.Metrics) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("batch endpoint was not found")
+		return ErrBatchNotFound
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned status: %d", resp.StatusCode)
+		return &StatusError{Code: resp.StatusCode}
 	}
 
 	return nil
