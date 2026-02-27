@@ -18,11 +18,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// BatchSender абстрагирует отправку батча метрик (HTTP или gRPC).
+type BatchSender interface {
+	SendBatch(metrics []model.Metrics) error
+}
+
 // Agent собирает метрики из runtime и системы, отправляя их на сервер.
 // Поддерживает параллельную отправку через пул воркеров (rate limiting).
 type Agent struct {
 	collector      *metricsCollector
-	client         *metricsClient
+	sender         BatchSender
+	grpcClient     *grpcMetricsClient // nil если используется HTTP
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	currentMetrics map[string]model.Metrics
@@ -38,14 +44,15 @@ type Agent struct {
 // serverURL — адрес сервера метрик, pollInterval — интервал сбора,
 // reportInterval — интервал отправки, key — ключ для HMAC подписи,
 // rateLimit — количество параллельных воркеров (0 — синхронная отправка).
-func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration, key string, rateLimit int, publicKey *rsa.PublicKey, logger *zap.Logger) *Agent {
+func NewAgent(sender BatchSender, grpcClient *grpcMetricsClient, pollInterval time.Duration, reportInterval time.Duration, rateLimit int, logger *zap.Logger) *Agent {
 	if rateLimit < 0 {
 		rateLimit = 0
 	}
 
 	return &Agent{
 		collector:      newMetricsCollector(),
-		client:         newMetricsClient(serverURL, key, publicKey),
+		sender:         sender,
+		grpcClient:     grpcClient,
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 		currentMetrics: make(map[string]model.Metrics),
@@ -80,7 +87,7 @@ func (a *Agent) startWorkers(ctx context.Context) {
 					if len(batch) == 0 {
 						continue
 					}
-					if err := a.client.SendBatch(batch); err != nil {
+					if err := a.sender.SendBatch(batch); err != nil {
 						a.logger.Error("failed to send batch",
 							zap.Int("batch_size:", len(batch)),
 							zap.Int("worker", id),
@@ -151,6 +158,10 @@ func (a *Agent) Shutdown() {
 		a.workersWG.Wait()
 	}
 
+	if a.grpcClient != nil {
+		_ = a.grpcClient.Close()
+	}
+
 	a.logger.Info("Final metrics sent, workers stopped")
 }
 
@@ -160,7 +171,7 @@ func (a *Agent) sendBatch(batch []model.Metrics) {
 		return
 	}
 
-	if err := a.client.SendBatch(batch); err != nil {
+	if err := a.sender.SendBatch(batch); err != nil {
 		a.logger.Error("failed to send batch",
 			zap.Int("count:", len(batch)),
 			zap.Error(err))
@@ -287,11 +298,28 @@ func (a *Agent) collectSystemMetrics() {
 var Module = fx.Options(
 	fx.Provide(
 		func(cfg *config.AgentConfig, logger *zap.Logger) (*Agent, error) {
-			pubKey, err := loadPublicKey(cfg.CryptoKey, logger)
-			if err != nil {
-				return nil, err
+			var sender BatchSender
+			var grpcCl *grpcMetricsClient
+
+			if cfg.GRPCAddress != "" {
+				localIP := resolveLocalIP()
+				var err error
+				grpcCl, err = newGRPCMetricsClient(cfg.GRPCAddress, localIP)
+				if err != nil {
+					return nil, fmt.Errorf("create gRPC client: %w", err)
+				}
+				sender = grpcCl
+				logger.Info("Agent will send metrics via gRPC", zap.String("address", cfg.GRPCAddress))
+			} else {
+				pubKey, err := loadPublicKey(cfg.CryptoKey, logger)
+				if err != nil {
+					return nil, err
+				}
+				sender = newMetricsClient(cfg.ServerAddress, cfg.Key, pubKey)
+				logger.Info("Agent will send metrics via HTTP", zap.String("address", cfg.ServerAddress))
 			}
-			return NewAgent(cfg.ServerAddress, cfg.PollInterval, cfg.ReportInterval, cfg.Key, cfg.RateLimit, pubKey, logger), nil
+
+			return NewAgent(sender, grpcCl, cfg.PollInterval, cfg.ReportInterval, cfg.RateLimit, logger), nil
 		},
 	),
 
